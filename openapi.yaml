@@ -1,0 +1,958 @@
+openapi: 3.0.3
+info:
+  title: Portal API
+  version: 1.0.0
+  description: |
+    REST API for Portal system.
+
+    Scope:
+      - Authentication
+      - User profile
+      - Admin user management
+      - Action logs
+      - Dashboard analytics
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local
+
+tags:
+  - name: Auth
+  - name: User
+  - name: Admin
+  - name: Logs
+  - name: Dashboard
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration successful, verification email sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMessageResponse'
+        '400':
+          description: Invalid input
+        '409':
+          description: Email or username already exists / email is blacklisted
+
+  /auth/verify-email:
+    get:
+      tags: [Auth]
+      summary: Verify email by token
+      operationId: verifyEmail
+      parameters:
+        - in: query
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMessageResponse'
+        '400':
+          description: Invalid or expired token
+        '409':
+          description: Token already used or revoked
+
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      summary: Resend verification email
+      operationId: resendVerification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerificationRequest'
+      responses:
+        '200':
+          description: Verification email resent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMessageResponse'
+        '404':
+          description: User not found
+
+  /auth/set-password:
+    post:
+      tags: [Auth]
+      summary: Set password using verification or reset token
+      operationId: setPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPasswordRequest'
+      responses:
+        '200':
+          description: Password set successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMessageResponse'
+        '400':
+          description: Invalid token or password
+        '409':
+          description: Token expired, revoked, or already used
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email or username and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Invalid credentials
+        '403':
+          description: Account not verified or deleted
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current session
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMessageResponse'
+        '401':
+          description: Unauthorized
+
+  /users/me:
+    get:
+      tags: [User]
+      summary: Get current user profile
+      operationId: getMyProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Unauthorized
+    put:
+      tags: [User]
+      summary: Update current user profile
+      operationId: updateMyProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMyProfileRequest'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '409':
+          description: Username already exists
+
+  /users/me/change-password:
+    put:
+      tags: [User]
+      summary: Change current user password
+      operationId: changeMyPassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMessageResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '409':
+          description: Current password incorrect
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Get user list with pagination and filters
+      operationId: adminListUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: username
+          schema:
+            type: string
+        - in: query
+          name: email
+          schema:
+            type: string
+        - in: query
+          name: full_name
+          schema:
+            type: string
+        - in: query
+          name: dob
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: role
+          schema:
+            $ref: '#/components/schemas/UserRole'
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/UserStatus'
+        - in: query
+          name: include_deleted
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsersResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Admin]
+      summary: Admin creates a new user
+      operationId: adminCreateUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCreateUserRequest'
+      responses:
+        '201':
+          description: User created, verification email sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Email/username already exists or email blacklisted
+
+  /admin/users/{userId}:
+    get:
+      tags: [Admin]
+      summary: Get user detail
+      operationId: adminGetUserDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '200':
+          description: User detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+    put:
+      tags: [Admin]
+      summary: Update user
+      operationId: adminUpdateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+        '409':
+          description: Conflict
+
+  /admin/users/{userId}/delete:
+    put:
+      tags: [Admin]
+      summary: Soft delete user
+      operationId: adminDeleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '200':
+          description: User soft deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+        '409':
+          description: User already deleted or operation not allowed
+
+  /admin/users/{userId}/restore:
+    put:
+      tags: [Admin]
+      summary: Restore soft deleted user
+      operationId: adminRestoreUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '200':
+          description: User restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+        '409':
+          description: Restore window expired or user not deleted
+
+  /admin/users/{userId}/role:
+    put:
+      tags: [Admin]
+      summary: Update user role
+      operationId: adminUpdateUserRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRoleRequest'
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+
+
+  /admin/logs:
+    get:
+      tags: [Logs]
+      summary: Get action logs
+      operationId: getActionLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: action
+          schema:
+            type: string
+        - in: query
+          name: actor_user_id
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: target_user_id
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Paginated logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedActionLogsResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /admin/dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Get admin dashboard summary
+      operationId: getDashboardSummary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummaryResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserIdPath:
+      in: path
+      name: userId
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    UserRole:
+      type: string
+      enum: [user, admin]
+
+    UserStatus:
+      type: string
+      enum: [pending_verification, active, deleted]
+
+    ActionName:
+      type: string
+      enum:
+        - REGISTER
+        - VERIFY_EMAIL
+        - LOGIN
+        - LOGOUT
+        - UPDATE_PROFILE
+        - CHANGE_PASSWORD
+        - ADMIN_SEARCH_USER
+        - ADMIN_VIEW_USER
+        - ADMIN_CREATE_USER
+        - ADMIN_UPDATE_USER
+        - ADMIN_DELETE_USER
+        - ADMIN_RESTORE_USER
+        - ADMIN_ASSIGN_ROLE
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - username
+        - first_name
+        - last_name
+        - dob
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        dob:
+          type: string
+          format: date
+
+    ResendVerificationRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+
+    SetPasswordRequest:
+      type: object
+      required:
+        - token
+        - password
+        - confirm_password
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 255
+        confirm_password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 255
+
+    LoginRequest:
+      type: object
+      required:
+        - identifier
+        - password
+      properties:
+        identifier:
+          type: string
+          description: Email or username
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - user
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Access token expiry in seconds
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    AuthMessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+
+    UpdateMyProfileRequest:
+      type: object
+      required:
+        - first_name
+        - last_name
+        - username
+        - dob
+      properties:
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        dob:
+          type: string
+          format: date
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - current_password
+        - new_password
+        - confirm_new_password
+      properties:
+        current_password:
+          type: string
+          format: password
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 255
+        confirm_new_password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 255
+
+    AdminCreateUserRequest:
+      type: object
+      required:
+        - email
+        - username
+        - first_name
+        - last_name
+        - dob
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        dob:
+          type: string
+          format: date
+        role:
+          $ref: '#/components/schemas/UserRole'
+
+    AdminUpdateUserRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        dob:
+          type: string
+          format: date
+
+    UpdateUserRoleRequest:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          $ref: '#/components/schemas/UserRole'
+
+    UserResponse:
+      type: object
+      required:
+        - id
+        - email
+        - username
+        - first_name
+        - last_name
+        - role
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        dob:
+          type: string
+          format: date
+          nullable: true
+        role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        email_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_by:
+          type: string
+          format: uuid
+          nullable: true
+
+    ActionLogResponse:
+      type: object
+      required:
+        - id
+        - action
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          $ref: '#/components/schemas/ActionName'
+        actor_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        actor_username:
+          type: string
+          nullable: true
+        actor_email:
+          type: string
+          format: email
+          nullable: true
+        actor_role:
+          type: string
+          nullable: true
+        target_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        target_username:
+          type: string
+          nullable: true
+        target_email:
+          type: string
+          format: email
+          nullable: true
+        target_role:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    PaginationMeta:
+      type: object
+      required:
+        - page
+        - page_size
+        - total
+      properties:
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+
+    PaginatedUsersResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    PaginatedActionLogsResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionLogResponse'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+
+    DashboardSummaryResponse:
+      type: object
+      required:
+        - total_users
+        - total_pending_users
+        - total_deleted_users
+        - total_logins_today
+        - total_registers_today
+        - top_10_last_login_users
+      properties:
+        total_users:
+          type: integer
+        total_pending_users:
+          type: integer
+        total_deleted_users:
+          type: integer
+        total_logins_today:
+          type: integer
+        total_registers_today:
+          type: integer
+        top_10_last_login_users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserLastLoginItem'
+
+    UserLastLoginItem:
+      type: object
+      required:
+        - user_id
+        - username
+        - email
+        - last_login_at
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        last_login_at:
+          type: string
+          format: date-time
