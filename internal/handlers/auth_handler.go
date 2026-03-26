@@ -17,7 +17,7 @@ func NewAuthHandler(service *services.AuthService) *AuthHandler {
 	return &AuthHandler{service: service}
 }
 
-func (h *AuthHandler) Register(c *gin.Context) {
+func (h *AuthHandler) RegisterUser(c *gin.Context) {
 	req := &dto.RegisterRequest{}
 	if err := c.ShouldBindJSON(req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})

@@ -22,6 +22,12 @@ type UserResponse struct {
 	DeletedBy       *string           `json:"deleted_by,omitempty"`
 }
 
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=8,max=255"`
+	ConfirmPassword string `json:"confirm_new_password" binding:"required,min=8,max=255"`
+}
+
 func ToUserResponse(user *models.User) UserResponse {
 	return UserResponse{
 		ID:        user.ID.String(),

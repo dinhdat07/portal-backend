@@ -13,7 +13,7 @@ info:
       - Dashboard analytics
 
 servers:
-  - url: http://localhost:8080/api/v1
+  - url: http://localhost:8000/api/v1
     description: Local
 
 tags:
@@ -118,7 +118,7 @@ paths:
     post:
       tags: [Auth]
       summary: Login with email or username and password
-      operationId: login
+      operationId: logIn
       requestBody:
         required: true
         content:

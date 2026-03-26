@@ -87,7 +87,7 @@ func (s *AuthService) LogIn(ctx context.Context, identifier, password string) (*
 		return nil, ErrAccountNotVerified
 	}
 
-	token, err := s.tokenManager.Generate(user.ID.String(), user.Role)
+	token, err := s.tokenManager.Generate(user.ID, user.Role)
 	if err != nil {
 		return nil, err
 	}

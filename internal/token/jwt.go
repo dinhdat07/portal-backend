@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type Claims struct {
-	UserID string          `json:"user_id"`
+	UserID uuid.UUID       `json:"user_id"`
 	Role   models.UserRole `json:"role"`
 	jwt.RegisteredClaims
 }
@@ -24,7 +25,7 @@ func New(secret string, ttlSec int) *Manager {
 	return &Manager{[]byte(secret), tokenTTL}
 }
 
-func (m *Manager) Generate(userID string, role models.UserRole) (string, error) {
+func (m *Manager) Generate(userID uuid.UUID, role models.UserRole) (string, error) {
 	claims := Claims{
 		UserID: userID,
 		Role:   role,

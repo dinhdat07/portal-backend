@@ -39,10 +39,13 @@ func New() (*App, error) {
 	// init
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
 	userRepo := repositories.NewUserRepository(db)
-	authService := services.NewAuthService(userRepo, tokenManager)
-	authHandler := handlers.NewAuthHandler(authService)
 
-	router := setupRouter(authHandler)
+	authService := services.NewAuthService(userRepo, tokenManager)
+	userService := services.NewUserService(userRepo)
+
+	authHandler := handlers.NewAuthHandler(authService)
+	userHandler := handlers.NewUserHandler(userService)
+	router := setupRouter(authHandler, userHandler, tokenManager)
 
 	return &App{
 		Config: cfg,

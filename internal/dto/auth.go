@@ -9,7 +9,7 @@ type RegisterRequest struct {
 	Username  string         `json:"username" binding:"required,min=3,max=50"`
 	FirstName string         `json:"first_name" binding:"required,max=100"`
 	LastName  string         `json:"last_name" binding:"required,max=100"`
-	Password  string         `json:"password" binding:"required,min=6"`
+	Password  string         `json:"password" binding:"required,min=8,max=255"`
 	Dob       types.DateOnly `json:"dob" binding:"required"`
 }
 

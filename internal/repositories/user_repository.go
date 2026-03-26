@@ -13,6 +13,14 @@ type UserRepository struct {
 	db *gorm.DB
 }
 
+func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	var user models.User
+	return r.db.WithContext(ctx).
+		Model(&user).
+		Where("id = ?", id).
+		Update("password_hash", passwordHash).Error
+}
+
 func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
@@ -24,7 +32,10 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	var user models.User
 	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
-	return &user, err
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
