@@ -13,7 +13,7 @@ type AuthHandler struct {
 	service *services.AuthService
 }
 
-func NewUserHandler(service *services.AuthService) *AuthHandler {
+func NewAuthHandler(service *services.AuthService) *AuthHandler {
 	return &AuthHandler{service: service}
 }
 
@@ -24,7 +24,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	err := h.service.Register(c.Request.Context(), req.Email, req.Username, req.Password, req.FirstName, req.LastName, req.Dob)
+	err := h.service.Register(c.Request.Context(), req.Email, req.Username, req.Password, req.FirstName, req.LastName, req.Dob.Time)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrEmailExists),
@@ -48,7 +48,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 }
 
-func (h *AuthHandler) Login(c *gin.Context) {
+func (h *AuthHandler) LogIn(c *gin.Context) {
 	req := &dto.LoginRequest{}
 	if err := c.ShouldBindJSON(req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -57,11 +57,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, user, err := h.service.Login(
+	result, err := h.service.LogIn(
 		c.Request.Context(),
 		req.Identifier,
 		req.Password,
 	)
+
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInvalidCredentials):
@@ -91,9 +92,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.LoginResponse{
-		AccessToken: token,
+		AccessToken: result.AccessToken,
 		TokenType:   "Bearer",
-		ExpiresIn:   3600,
-		User:        dto.ToUserResponse(user),
+		ExpiresIn:   result.ExpiresIn,
+		User:        dto.ToUserResponse(result.User),
 	})
 }

@@ -8,12 +8,12 @@ import (
 )
 
 type User struct {
-	ID              uuid.UUID `gorm:"type:uuid;primaryKey"`
-	Email           string    `gorm:"size:255;uniqueIndex;not null"`
-	Username        string    `gorm:"size:50;uniqueIndex;not null"`
-	FirstName       string    `gorm:"size:100;not null"`
-	LastName        string    `gorm:"size:100;not null"`
-	DOB             *time.Time
+	ID              uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	Email           string     `gorm:"size:255;uniqueIndex;not null"`
+	Username        string     `gorm:"size:50;uniqueIndex;not null"`
+	FirstName       string     `gorm:"size:100;not null"`
+	LastName        string     `gorm:"size:100;not null"`
+	DOB             *time.Time `gorm:"type:date"`
 	PasswordHash    *string    `gorm:"size:255"`
 	Role            UserRole   `gorm:"size:20;not null"`
 	Status          UserStatus `gorm:"size:30;not null"`

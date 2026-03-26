@@ -19,8 +19,8 @@ type AuthService struct {
 	tokenManager *token.Manager
 }
 
-func NewUserService(userRepo *repositories.UserRepository) *AuthService {
-	return &AuthService{userRepo: userRepo}
+func NewAuthService(userRepo *repositories.UserRepository, manager *token.Manager) *AuthService {
+	return &AuthService{userRepo: userRepo, tokenManager: manager}
 }
 
 func (s *AuthService) Register(ctx context.Context, email, username, password, firstName, lastName string, dob time.Time) error {
@@ -39,15 +39,18 @@ func (s *AuthService) Register(ctx context.Context, email, username, password, f
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	hashStr := string(hash)
 
+	// currently set auto active (no verify needed) for easy testing
+	now := time.Now()
 	user := &models.User{
-		Email:        email,
-		Username:     username,
-		FirstName:    firstName,
-		LastName:     lastName,
-		DOB:          &dob,
-		PasswordHash: &hashStr,
-		Role:         "user",
-		Status:       "active",
+		Email:           email,
+		Username:        username,
+		FirstName:       firstName,
+		LastName:        lastName,
+		DOB:             &dob,
+		PasswordHash:    &hashStr,
+		Role:            "user",
+		Status:          "active",
+		EmailVerifiedAt: &now,
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -57,7 +60,7 @@ func (s *AuthService) Register(ctx context.Context, email, username, password, f
 	return nil
 }
 
-func (s *AuthService) Login(ctx context.Context, identifier, password string) (string, *models.User, error) {
+func (s *AuthService) LogIn(ctx context.Context, identifier, password string) (*LoginResult, error) {
 	var user *models.User
 	var err error
 
@@ -69,27 +72,37 @@ func (s *AuthService) Login(ctx context.Context, identifier, password string) (s
 		user, err = s.userRepo.FindByUsername(ctx, identifier)
 	}
 	if err != nil {
-		return "", nil, ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(password)); err != nil {
-		return "", nil, ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
 
 	if user.DeletedAt.Valid {
-		return "", nil, ErrAccountDeleted
+		return nil, ErrAccountDeleted
 	}
 
 	if user.EmailVerifiedAt == nil {
-		return "", nil, ErrAccountNotVerified
+		return nil, ErrAccountNotVerified
 	}
 
 	token, err := s.tokenManager.Generate(user.ID.String(), user.Role)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
-	return token, user, nil
+	return &LoginResult{
+		AccessToken: token,
+		ExpiresIn:   s.tokenManager.ExpiresInSeconds(),
+		User:        user,
+	}, nil
+}
+
+type LoginResult struct {
+	AccessToken string
+	ExpiresIn   int
+	User        *models.User
 }
 
 func isEmail(s string) bool {

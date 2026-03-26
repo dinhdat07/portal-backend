@@ -15,11 +15,13 @@ type Claims struct {
 }
 
 type Manager struct {
-	secret []byte //HMAC requires []byte
+	secret   []byte //HMAC requires []byte
+	tokenTTL time.Duration
 }
 
-func New(secret string) *Manager {
-	return &Manager{[]byte(secret)}
+func New(secret string, ttlSec int) *Manager {
+	tokenTTL := time.Duration(ttlSec) * time.Second
+	return &Manager{[]byte(secret), tokenTTL}
 }
 
 func (m *Manager) Generate(userID string, role models.UserRole) (string, error) {
@@ -27,7 +29,7 @@ func (m *Manager) Generate(userID string, role models.UserRole) (string, error) 
 		UserID: userID,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   "access-token",
 		},
@@ -58,4 +60,8 @@ func (m *Manager) Parse(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+func (m *Manager) ExpiresInSeconds() int {
+	return int(m.tokenTTL.Seconds())
 }
