@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"portal-system/internal/domain"
 	"portal-system/internal/models"
@@ -22,6 +23,17 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passw
 		Update("password_hash", passwordHash).Error
 }
 
+func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
+	return r.db.WithContext(ctx).
+		Model(user).
+		Updates(map[string]interface{}{
+			"first_name": user.FirstName,
+			"last_name":  user.LastName,
+			"dob":        user.DOB,
+			"username":   user.Username,
+		}).Error
+}
+
 func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
@@ -33,6 +45,15 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	var user models.User
 	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *UserRepository) FindByIDUnscoped(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	var user models.User
+	err := r.db.WithContext(ctx).Unscoped().First(&user, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -55,8 +76,15 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	return &user, err
 }
 
-func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&models.User{}, "id = ?", id).Error
+func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID, deletedBy uuid.UUID) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"deleted_at": time.Now(),
+			"deleted_by": deletedBy,
+			"status":     models.StatusDeleted,
+		}).Error
 }
 
 func (r *UserRepository) ListUsers(ctx context.Context, in domain.ListUsersInput) ([]models.User, int64, error) {
@@ -110,4 +138,23 @@ func (r *UserRepository) ListUsers(ctx context.Context, in domain.ListUsersInput
 
 	return users, total, nil
 
+}
+
+func (r *UserRepository) Restore(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Unscoped().
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"deleted_at": nil,
+			"deleted_by": nil,
+			"status":     models.StatusActive,
+		}).Error
+}
+
+func (r *UserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role models.UserRole) error {
+	return r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", id).
+		Update("role", role).Error
 }

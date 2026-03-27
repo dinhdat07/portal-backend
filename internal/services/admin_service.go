@@ -2,11 +2,14 @@ package services
 
 import (
 	"context"
+	"errors"
 	"portal-system/internal/domain"
 	"portal-system/internal/models"
 	"portal-system/internal/repositories"
+	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type AdminService struct {
@@ -40,7 +43,7 @@ func (svc *AdminService) ListUsers(ctx context.Context, in domain.ListUsersInput
 
 }
 
-func (svc *AdminService) CreateUser(ctx *gin.Context, in domain.CreateUserInput) (*models.User, error) {
+func (svc *AdminService) CreateUser(ctx context.Context, in domain.CreateUserInput) (*models.User, error) {
 	if in.Role != "" && !in.Role.IsValid() {
 		return nil, ErrInvalidInput
 	}
@@ -60,6 +63,77 @@ func (svc *AdminService) CreateUser(ctx *gin.Context, in domain.CreateUserInput)
 	if err != nil {
 		return nil, ErrInternalServer
 	}
+
+	return user, nil
+}
+
+func (svc *AdminService) DeleteUser(ctx context.Context, userID uuid.UUID, adminID uuid.UUID) (*models.User, error) {
+	user, err := svc.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	if err := svc.userRepo.Delete(ctx, userID, adminID); err != nil {
+		return nil, ErrInternalServer
+	}
+
+	now := time.Now()
+	user.DeletedAt = gorm.DeletedAt{Time: now, Valid: true}
+	user.DeletedBy = &adminID
+	user.Status = models.StatusDeleted
+
+	return user, nil
+}
+
+func (svc *AdminService) RestoreUser(ctx context.Context, userID uuid.UUID) (*models.User, error) {
+	user, err := svc.userRepo.FindByIDUnscoped(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	if user.DeletedAt.Time.IsZero() {
+		return nil, ErrUserNotDeleted
+	}
+
+	if err := svc.userRepo.Restore(ctx, userID); err != nil {
+		return nil, ErrInternalServer
+	}
+
+	user.DeletedAt = gorm.DeletedAt{}
+	user.DeletedBy = nil
+	user.Status = models.StatusActive
+
+	return user, nil
+}
+
+func (svc *AdminService) UpdateRole(ctx context.Context, id uuid.UUID, role models.UserRole) (*models.User, error) {
+	if !role.IsValid() {
+		return nil, ErrInvalidInput
+	}
+
+	user, err := svc.userRepo.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	if user.Role == role {
+		return user, nil
+	}
+
+	if err := svc.userRepo.UpdateRole(ctx, id, role); err != nil {
+		return nil, ErrInternalServer
+	}
+
+	user.Role = role
 
 	return user, nil
 }

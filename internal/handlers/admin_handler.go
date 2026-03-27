@@ -9,6 +9,7 @@ import (
 	"portal-system/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 const (
@@ -17,11 +18,12 @@ const (
 )
 
 type AdminHandler struct {
-	service *services.AdminService
+	adminSvc *services.AdminService
+	userSvc  *services.UserService
 }
 
-func NewAdminHandler(svc *services.AdminService) *AdminHandler {
-	return &AdminHandler{service: svc}
+func NewAdminHandler(adminSvc *services.AdminService, userSvc *services.UserService) *AdminHandler {
+	return &AdminHandler{adminSvc: adminSvc, userSvc: userSvc}
 }
 
 func (h *AdminHandler) ListUsers(c *gin.Context) {
@@ -52,7 +54,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		IncludeDeleted: *query.IncludeDeleted,
 	}
 
-	result, err := h.service.ListUsers(c, input)
+	result, err := h.adminSvc.ListUsers(c.Request.Context(), input)
 
 	if err != nil {
 		switch {
@@ -103,7 +105,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		Role:      models.UserRole(req.Role),
 	}
 
-	user, err := h.service.CreateUser(c, input)
+	user, err := h.adminSvc.CreateUser(c.Request.Context(), input)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInvalidInput):
@@ -117,5 +119,219 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		}
 	}
 
+	c.JSON(http.StatusOK, dto.ToUserResponse(user))
+}
+
+func (h *AdminHandler) GetUserDetail(c *gin.Context) {
+	userIDValue := c.Param("userId")
+	if userIDValue == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is required",
+		})
+		return
+	}
+
+	userID, err := uuid.Parse(userIDValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is invalid",
+		})
+		return
+	}
+
+	user, err := h.userSvc.GetProfile(c.Request.Context(), userID)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "cannot load user info",
+			})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, dto.ToUserResponse(user))
+}
+
+func (h *AdminHandler) UpdateUser(c *gin.Context) {
+	userIDValue := c.Param("userId")
+	if userIDValue == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is required",
+		})
+		return
+	}
+
+	userID, err := uuid.Parse(userIDValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is invalid",
+		})
+		return
+	}
+
+	req := &dto.UpdateUserRequest{}
+
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid input",
+		})
+	}
+
+	input := domain.UpdateUserInput{
+		Username:  req.Username,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		DOB:       &req.DOB.Time,
+	}
+
+	user, err := h.userSvc.UpdateProfile(c.Request.Context(), userID, input)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "cannot update user info",
+			})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, dto.ToUserResponse(user))
+}
+
+func (h *AdminHandler) DeleteUser(c *gin.Context) {
+	userIDValue := c.Param("userId")
+	if userIDValue == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is required",
+		})
+		return
+	}
+
+	userID, err := uuid.Parse(userIDValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is invalid",
+		})
+		return
+	}
+
+	adminIDValue, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	adminID, ok := adminIDValue.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid admin id in token",
+		})
+		return
+	}
+
+	user, err := h.adminSvc.DeleteUser(c.Request.Context(), userID, adminID)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "cannot delete user info",
+			})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, dto.ToUserResponse(user))
+}
+
+func (h *AdminHandler) RestoreUser(c *gin.Context) {
+	userIDValue := c.Param("userId")
+	if userIDValue == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is required",
+		})
+		return
+	}
+
+	userID, err := uuid.Parse(userIDValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is invalid",
+		})
+		return
+	}
+
+	user, err := h.adminSvc.RestoreUser(c.Request.Context(), userID)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "cannot restore user",
+			})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, dto.ToUserResponse(user))
+}
+
+func (h *AdminHandler) UpdateRole(c *gin.Context) {
+	userIDValue := c.Param("userId")
+	if userIDValue == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is required",
+		})
+		return
+	}
+
+	userID, err := uuid.Parse(userIDValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "userId is invalid",
+		})
+		return
+	}
+
+	req := &dto.UpdateRoleRequest{}
+
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid input",
+		})
+	}
+
+	user, err := h.adminSvc.UpdateRole(c.Request.Context(), userID, req.Role)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "cannot update user role",
+			})
+		}
+		return
+	}
 	c.JSON(http.StatusOK, dto.ToUserResponse(user))
 }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"portal-system/internal/domain"
 	"portal-system/internal/dto"
 	"portal-system/internal/services"
 
@@ -111,4 +112,58 @@ func (h *UserHandler) ChangeMyPassword(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.AuthMessageResponse{Message: "password changed successfully"})
 
+}
+
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	userID, ok := userIDValue.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid user id in token",
+		})
+		return
+	}
+
+	req := &dto.UpdateUserRequest{}
+
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid input",
+		})
+	}
+
+	input := domain.UpdateUserInput{
+		Username:  req.Username,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		DOB:       &req.DOB.Time,
+	}
+
+	user, err := h.userService.UpdateProfile(c.Request.Context(), userID, input)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInvalidUserID):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+		case errors.Is(err, services.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "cannot load user info",
+			})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, dto.ToUserResponse(user))
 }

@@ -46,7 +46,7 @@ func New() (*App, error) {
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
-	adminHandler := handlers.NewAdminHandler(adminService)
+	adminHandler := handlers.NewAdminHandler(adminService, userService)
 	router := setupRouter(authHandler, userHandler, adminHandler, tokenManager)
 
 	return &App{

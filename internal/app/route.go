@@ -28,7 +28,9 @@ func setupRouter(authHandler *handlers.AuthHandler, userHandler *handlers.UserHa
 			me := users.Group("/me")
 			{
 				me.GET("", userHandler.GetMyProfile)
+				me.GET("", userHandler.UpdateProfile)
 				me.PUT("/change-password", userHandler.ChangeMyPassword)
+
 			}
 		}
 
@@ -39,7 +41,17 @@ func setupRouter(authHandler *handlers.AuthHandler, userHandler *handlers.UserHa
 			{
 				users.GET("", adminHandler.ListUsers)
 				users.POST("", adminHandler.CreateUser)
+
+				user := users.Group("/:userId")
+				{
+					user.GET("", adminHandler.GetUserDetail)
+					user.PUT("", adminHandler.UpdateUser)
+					user.DELETE("/delete", adminHandler.DeleteUser)
+					user.PUT("/restore", adminHandler.RestoreUser)
+					user.PUT("/role", adminHandler.UpdateRole)
+				}
 			}
+
 		}
 	}
 

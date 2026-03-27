@@ -25,3 +25,14 @@ type CreateUserRequest struct {
 	DOB       *types.DateOnly `json:"dob,omitempty" binding:"required"`
 	Role      models.UserRole `json:"role" binding:"required"`
 }
+
+type UpdateUserRequest struct {
+	Username  *string         `json:"username,omitempty" binding:"min=3 max=50"`
+	FirstName *string         `json:"first_name,omitempty" binding:"max=100"`
+	LastName  *string         `json:"last_name,omitempty" binding:"max=100"`
+	DOB       *types.DateOnly `json:"dob,omitempty"`
+}
+
+type UpdateRoleRequest struct {
+	Role models.UserRole `json:"role" binding:"required"`
+}

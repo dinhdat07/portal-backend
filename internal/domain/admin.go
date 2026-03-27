@@ -32,3 +32,10 @@ type CreateUserInput struct {
 	DOB       *time.Time
 	Role      models.UserRole
 }
+
+type UpdateUserInput struct {
+	Username  *string
+	FirstName *string
+	LastName  *string
+	DOB       *time.Time
+}

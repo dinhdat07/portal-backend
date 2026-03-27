@@ -17,6 +17,7 @@ var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrUserAlreadyDeleted = errors.New("user already deleted")
 	ErrInvalidUserID      = errors.New("invalid user id")
+	ErrUserNotDeleted     = errors.New("user is not deleted")
 
 	// Registration
 	ErrEmailExists      = errors.New("email already exists")

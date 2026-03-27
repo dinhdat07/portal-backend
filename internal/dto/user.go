@@ -3,6 +3,8 @@ package dto
 import (
 	"portal-system/internal/models"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type UserResponse struct {
@@ -20,6 +22,8 @@ type UserResponse struct {
 	UpdatedAt       time.Time         `json:"updated_at"`
 	DeletedAt       *time.Time        `json:"deleted_at,omitempty"`
 	DeletedBy       *string           `json:"deleted_by,omitempty"`
+	RestoredAt      *time.Time        `json:"restored_at,omitempty"`
+	RestoredBy      *uuid.UUID        `json:"restored_by,omitempty"`
 }
 
 type ChangePasswordRequest struct {
