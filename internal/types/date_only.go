@@ -13,6 +13,23 @@ type DateOnly struct {
 
 func (d *DateOnly) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `"`)
+	return d.parse(s)
+}
+
+func (d DateOnly) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + d.Format(dateOnlyLayout) + `"`), nil
+}
+
+func (d *DateOnly) UnmarshalText(text []byte) error {
+	return d.parse(string(text))
+}
+
+func (d *DateOnly) parse(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		d.Time = time.Time{}
+		return nil
+	}
 
 	t, err := time.Parse(dateOnlyLayout, s)
 	if err != nil {
@@ -21,8 +38,4 @@ func (d *DateOnly) UnmarshalJSON(b []byte) error {
 
 	d.Time = t
 	return nil
-}
-
-func (d DateOnly) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + d.Format(dateOnlyLayout) + `"`), nil
 }

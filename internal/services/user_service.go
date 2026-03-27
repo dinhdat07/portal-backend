@@ -31,13 +31,7 @@ func (svc *UserService) GetProfile(ctx context.Context, id uuid.UUID) (*models.U
 	return user, nil
 }
 
-func (svc *UserService) ChangePassword(
-	ctx context.Context,
-	id uuid.UUID,
-	current string,
-	newPassword string,
-	confirm string,
-) error {
+func (svc *UserService) ChangePassword(ctx context.Context, id uuid.UUID, current, newPassword, confirm string) error {
 	user, err := svc.userRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

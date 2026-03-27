@@ -42,10 +42,12 @@ func New() (*App, error) {
 
 	authService := services.NewAuthService(userRepo, tokenManager)
 	userService := services.NewUserService(userRepo)
+	adminService := services.NewAdminService(userRepo)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
-	router := setupRouter(authHandler, userHandler, tokenManager)
+	adminHandler := handlers.NewAdminHandler(adminService)
+	router := setupRouter(authHandler, userHandler, adminHandler, tokenManager)
 
 	return &App{
 		Config: cfg,

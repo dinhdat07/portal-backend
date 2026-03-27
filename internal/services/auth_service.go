@@ -2,10 +2,11 @@ package services
 
 import (
 	"context"
+	"net/mail"
 	"strings"
 	"time"
 
-	"net/mail"
+	"portal-system/internal/domain"
 	"portal-system/internal/models"
 	"portal-system/internal/repositories"
 	"portal-system/internal/token"
@@ -60,7 +61,7 @@ func (s *AuthService) Register(ctx context.Context, email, username, password, f
 	return nil
 }
 
-func (s *AuthService) LogIn(ctx context.Context, identifier, password string) (*LoginResult, error) {
+func (s *AuthService) LogIn(ctx context.Context, identifier, password string) (*domain.LoginResult, error) {
 	var user *models.User
 	var err error
 
@@ -92,17 +93,11 @@ func (s *AuthService) LogIn(ctx context.Context, identifier, password string) (*
 		return nil, err
 	}
 
-	return &LoginResult{
+	return &domain.LoginResult{
 		AccessToken: token,
 		ExpiresIn:   s.tokenManager.ExpiresInSeconds(),
 		User:        user,
 	}, nil
-}
-
-type LoginResult struct {
-	AccessToken string
-	ExpiresIn   int
-	User        *models.User
 }
 
 func isEmail(s string) bool {

@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 
+	"portal-system/internal/domain"
 	"portal-system/internal/models"
 
 	"github.com/google/uuid"
@@ -56,4 +57,57 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 
 func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&models.User{}, "id = ?", id).Error
+}
+
+func (r *UserRepository) ListUsers(ctx context.Context, in domain.ListUsersInput) ([]models.User, int64, error) {
+	var user models.User
+
+	db := r.db.WithContext(ctx).Model(&user)
+
+	// build dynamic query
+	if in.IncludeDeleted {
+		db = db.Unscoped()
+	}
+
+	if in.Username != "" {
+		db = db.Where("username ILIKE ?", "%"+in.Username+"%")
+	}
+
+	if in.Email != "" {
+		db = db.Where("email ILIKE ?", "%"+in.Email+"%")
+	}
+
+	if in.FullName != "" {
+		db = db.Where(
+			"CONCAT(first_name, ' ', last_name) ILIKE ?",
+			"%"+in.FullName+"%",
+		)
+	}
+
+	if in.Dob != nil {
+		db = db.Where("dob = ?", *in.Dob)
+	}
+
+	if in.Role != "" {
+		db = db.Where("role = ?", in.Role)
+	}
+
+	if in.Status != "" {
+		db = db.Where("status = ?", in.Status)
+	}
+
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (in.Page - 1) * in.PageSize
+	var users []models.User
+
+	if err := db.Offset(offset).Limit(in.PageSize).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+
 }
