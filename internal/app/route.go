@@ -38,6 +38,7 @@ func setupRouter(authHandler *handlers.AuthHandler, userHandler *handlers.UserHa
 			users := admin.Group("/users")
 			{
 				users.GET("", adminHandler.ListUsers)
+				users.POST("", adminHandler.CreateUser)
 			}
 		}
 	}

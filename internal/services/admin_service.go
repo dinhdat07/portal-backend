@@ -3,7 +3,10 @@ package services
 import (
 	"context"
 	"portal-system/internal/domain"
+	"portal-system/internal/models"
 	"portal-system/internal/repositories"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AdminService struct {
@@ -35,4 +38,28 @@ func (svc *AdminService) ListUsers(ctx context.Context, in domain.ListUsersInput
 		PageSize: in.PageSize,
 	}, nil
 
+}
+
+func (svc *AdminService) CreateUser(ctx *gin.Context, in domain.CreateUserInput) (*models.User, error) {
+	if in.Role != "" && !in.Role.IsValid() {
+		return nil, ErrInvalidInput
+	}
+
+	user := &models.User{
+		Email:        in.Email,
+		Username:     in.Username,
+		FirstName:    in.FirstName,
+		LastName:     in.LastName,
+		DOB:          in.DOB,
+		PasswordHash: nil,
+		Role:         "user",
+		Status:       models.StatusPending,
+	}
+
+	err := svc.userRepo.Create(ctx, user)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	return user, nil
 }

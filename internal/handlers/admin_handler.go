@@ -84,3 +84,38 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	})
 
 }
+
+func (h *AdminHandler) CreateUser(c *gin.Context) {
+	req := &dto.CreateUserRequest{}
+
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid input",
+		})
+	}
+
+	input := domain.CreateUserInput{
+		Email:     req.Email,
+		Username:  req.Username,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		DOB:       &req.DOB.Time,
+		Role:      models.UserRole(req.Role),
+	}
+
+	user, err := h.service.CreateUser(c, input)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInvalidInput):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "invalid query",
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "cannot list users",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, dto.ToUserResponse(user))
+}
