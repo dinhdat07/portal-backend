@@ -157,3 +157,7 @@ func (r *UserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role mode
 		Where("id = ?", id).
 		Update("role", role).Error
 }
+
+func (r *UserRepository) WithTx(tx *gorm.DB) *UserRepository {
+	return NewUserRepository(tx)
+}

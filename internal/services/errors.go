@@ -37,4 +37,5 @@ var (
 
 	// System
 	ErrInternalServer = errors.New("internal server error")
+	ErrAuditLogger    = errors.New("cannot log this action")
 )

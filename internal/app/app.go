@@ -39,10 +39,12 @@ func New() (*App, error) {
 	// init
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
 	userRepo := repositories.NewUserRepository(db)
+	auditLogRepo := repositories.NewAuditLogRepository(db)
 
-	authService := services.NewAuthService(userRepo, tokenManager)
-	userService := services.NewUserService(userRepo)
-	adminService := services.NewAdminService(userRepo)
+	auditLogService := services.NewAuditLogService(auditLogRepo)
+	authService := services.NewAuthService(db, userRepo, tokenManager, auditLogService)
+	userService := services.NewUserService(db, userRepo, auditLogService)
+	adminService := services.NewAdminService(db, userRepo, auditLogService)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)

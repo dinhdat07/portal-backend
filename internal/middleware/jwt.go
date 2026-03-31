@@ -36,6 +36,8 @@ func JWTAuth(manager *token.Manager) gin.HandlerFunc {
 		// set necessary field in gin context
 		c.Set("user_id", claims.UserID)
 		c.Set("role", claims.Role)
+		c.Set("mail", claims.Email)
+		c.Set("username", claims.Username)
 
 		c.Next()
 	}

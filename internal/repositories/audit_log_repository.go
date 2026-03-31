@@ -71,3 +71,7 @@ func (r *AuditLogRepository) List(ctx context.Context, filter domain.AuditLogFil
 
 	return logs, total, nil
 }
+
+func (r *AuditLogRepository) WithTx(tx *gorm.DB) *AuditLogRepository {
+	return NewAuditLogRepository(tx)
+}

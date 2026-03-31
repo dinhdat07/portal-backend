@@ -15,3 +15,8 @@ type AuditLogFilter struct {
 	Page         int
 	PageSize     int
 }
+
+type AuditMeta struct {
+	IPAddress string
+	UserAgent string
+}

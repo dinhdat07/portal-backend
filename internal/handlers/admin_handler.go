@@ -7,6 +7,7 @@ import (
 	"portal-system/internal/dto"
 	"portal-system/internal/models"
 	"portal-system/internal/services"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid query",
 		})
+		return
 	}
 
 	if query.Page == 0 {
@@ -42,19 +44,37 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		query.PageSize = DEFAULT_PAGE_SIZE
 	}
 
+	var dob *time.Time
+	if query.Dob != nil {
+		dob = &query.Dob.Time
+	}
+
+	includeDeleted := false
+	if query.IncludeDeleted != nil {
+		includeDeleted = *query.IncludeDeleted
+	}
+
 	input := domain.UsersFilter{
 		Page:           query.Page,
 		PageSize:       query.PageSize,
 		Username:       query.Username,
 		Email:          query.Email,
-		FullName:       query.Email,
-		Dob:            &query.Dob.Time,
+		FullName:       query.FullName,
+		Dob:            dob,
 		Role:           models.UserRole(query.Role),
 		Status:         models.UserStatus(query.Status),
-		IncludeDeleted: *query.IncludeDeleted,
+		IncludeDeleted: includeDeleted,
 	}
 
-	result, err := h.adminSvc.ListUsers(c.Request.Context(), input)
+	meta := getAuditMetaFromGin(c)
+	actor, err := getActorFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+	result, err := h.adminSvc.ListUsers(c.Request.Context(), meta, actor, input)
 
 	if err != nil {
 		switch {
@@ -74,7 +94,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		data = append(data, dto.ToUserResponse(&u))
 	}
 
-	meta := dto.PaginationMeta{
+	pageMeta := dto.PaginationMeta{
 		Page:     result.Page,
 		PageSize: result.PageSize,
 		Total:    result.Total,
@@ -82,19 +102,29 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.PaginatedUsersResponse{
 		Data: data,
-		Meta: meta,
+		Meta: pageMeta,
 	})
 
 }
 
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	req := &dto.CreateUserRequest{}
-
 	if err := c.ShouldBindJSON(req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid input",
 		})
+		return
 	}
+
+	actor, err := getActorFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	meta := getAuditMetaFromGin(c)
 
 	input := domain.CreateUserInput{
 		Email:     req.Email,
@@ -102,26 +132,26 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		DOB:       &req.DOB.Time,
-		Role:      models.UserRole(req.Role),
+		Role:      req.Role,
 	}
 
-	user, err := h.adminSvc.CreateUser(c.Request.Context(), input)
+	user, err := h.adminSvc.CreateUser(c.Request.Context(), meta, actor, input)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInvalidInput):
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "invalid query",
+				"error": "invalid input",
 			})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "cannot list users",
+				"error": "cannot create user",
 			})
 		}
+		return
 	}
 
 	c.JSON(http.StatusOK, dto.ToUserResponse(user))
 }
-
 func (h *AdminHandler) GetUserDetail(c *gin.Context) {
 	userIDValue := c.Param("userId")
 	if userIDValue == "" {
@@ -139,7 +169,17 @@ func (h *AdminHandler) GetUserDetail(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userSvc.GetProfile(c.Request.Context(), userID)
+	actor, err := getActorFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	meta := getAuditMetaFromGin(c)
+
+	user, err := h.userSvc.GetProfile(c.Request.Context(), meta, actor, userID)
 
 	if err != nil {
 		switch {
@@ -189,7 +229,16 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		DOB:       &req.DOB.Time,
 	}
 
-	user, err := h.userSvc.UpdateProfile(c.Request.Context(), userID, input)
+	meta := getAuditMetaFromGin(c)
+	actor, err := getActorFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	user, err := h.userSvc.UpdateProfile(c.Request.Context(), meta, actor, userID, input)
 
 	if err != nil {
 		switch {
@@ -224,23 +273,16 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	adminIDValue, exists := c.Get("user_id")
-	if !exists {
+	meta := getAuditMetaFromGin(c)
+	actor, err := getActorFromGin(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
 		})
 		return
 	}
 
-	adminID, ok := adminIDValue.(uuid.UUID)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid admin id in token",
-		})
-		return
-	}
-
-	user, err := h.adminSvc.DeleteUser(c.Request.Context(), userID, adminID)
+	user, err := h.adminSvc.DeleteUser(c.Request.Context(), meta, actor, userID)
 
 	if err != nil {
 		switch {
@@ -275,7 +317,15 @@ func (h *AdminHandler) RestoreUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.adminSvc.RestoreUser(c.Request.Context(), userID)
+	meta := getAuditMetaFromGin(c)
+	actor, err := getActorFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+	}
+
+	user, err := h.adminSvc.RestoreUser(c.Request.Context(), meta, actor, userID)
 
 	if err != nil {
 		switch {
@@ -318,7 +368,15 @@ func (h *AdminHandler) UpdateRole(c *gin.Context) {
 		})
 	}
 
-	user, err := h.adminSvc.UpdateRole(c.Request.Context(), userID, req.Role)
+	meta := getAuditMetaFromGin(c)
+	actor, err := getActorFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+	}
+
+	user, err := h.adminSvc.UpdateRole(c.Request.Context(), meta, actor, userID, req.Role)
 
 	if err != nil {
 		switch {

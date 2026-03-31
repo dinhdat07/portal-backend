@@ -3,12 +3,14 @@ package models
 type ActionName string
 
 const (
-	ActionRegister         ActionName = "REGISTER"
-	ActionVerifyEmail      ActionName = "VERIFY_EMAIL"
-	ActionLogin            ActionName = "LOGIN"
-	ActionLogout           ActionName = "LOGOUT"
-	ActionUpdateProfile    ActionName = "UPDATE_PROFILE"
-	ActionChangePassword   ActionName = "CHANGE_PASSWORD"
+	ActionRegister    ActionName = "REGISTER"
+	ActionVerifyEmail ActionName = "VERIFY_EMAIL"
+	ActionLogin       ActionName = "LOGIN"
+	ActionLogout      ActionName = "LOGOUT"
+
+	ActionUpdateProfile  ActionName = "UPDATE_PROFILE"
+	ActionChangePassword ActionName = "CHANGE_PASSWORD"
+
 	ActionAdminSearchUser  ActionName = "ADMIN_SEARCH_USER"
 	ActionAdminViewUser    ActionName = "ADMIN_VIEW_USER"
 	ActionAdminCreateUser  ActionName = "ADMIN_CREATE_USER"

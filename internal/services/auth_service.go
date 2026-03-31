@@ -13,18 +13,21 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type AuthService struct {
+	db           *gorm.DB
+	auditLogger  *AuditLogService
 	userRepo     *repositories.UserRepository
 	tokenManager *token.Manager
 }
 
-func NewAuthService(userRepo *repositories.UserRepository, manager *token.Manager) *AuthService {
-	return &AuthService{userRepo: userRepo, tokenManager: manager}
+func NewAuthService(db *gorm.DB, userRepo *repositories.UserRepository, manager *token.Manager, logger *AuditLogService) *AuthService {
+	return &AuthService{db: db, userRepo: userRepo, tokenManager: manager, auditLogger: logger}
 }
 
-func (s *AuthService) Register(ctx context.Context, email, username, password, firstName, lastName string, dob time.Time) error {
+func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, email, username, password, firstName, lastName string, dob time.Time) error {
 	existing, _ := s.userRepo.FindByEmail(ctx, email)
 	// later: check email in blacklist
 
@@ -54,14 +57,22 @@ func (s *AuthService) Register(ctx context.Context, email, username, password, f
 		EmailVerifiedAt: &now,
 	}
 
-	if err := s.userRepo.Create(ctx, user); err != nil {
-		return err
+	// transaction, critical
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.userRepo.Create(ctx, user); err != nil {
+			return err
+		}
+		return s.auditLogger.Log(ctx, meta, models.ActionRegister, nil, user)
+	})
+
+	if err != nil {
+		return ErrInternalServer
 	}
 
 	return nil
 }
 
-func (s *AuthService) LogIn(ctx context.Context, identifier, password string) (*domain.LoginResult, error) {
+func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identifier, password string) (*domain.LoginResult, error) {
 	var user *models.User
 	var err error
 
@@ -88,10 +99,13 @@ func (s *AuthService) LogIn(ctx context.Context, identifier, password string) (*
 		return nil, ErrAccountNotVerified
 	}
 
-	token, err := s.tokenManager.Generate(user.ID, user.Role)
+	token, err := s.tokenManager.Generate(user.ID, user.Role, user.Email, user.Username)
 	if err != nil {
 		return nil, err
 	}
+
+	// best-effort
+	s.auditLogger.Log(ctx, meta, models.ActionLogin, user, nil)
 
 	return &domain.LoginResult{
 		AccessToken: token,

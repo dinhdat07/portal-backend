@@ -20,23 +20,17 @@ func NewUserHandler(service *services.UserService) *UserHandler {
 }
 
 func (h *UserHandler) GetMyProfile(c *gin.Context) {
-	userIDValue, exists := c.Get("user_id")
-	if !exists {
+
+	meta := getAuditMetaFromGin(c)
+	actor, err := getActorFromGin(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
 		})
 		return
 	}
 
-	userID, ok := userIDValue.(uuid.UUID)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid user id in token",
-		})
-		return
-	}
-
-	user, err := h.userService.GetProfile(c.Request.Context(), userID)
+	user, err := h.userService.GetProfile(c.Request.Context(), meta, actor, actor.ID)
 
 	if err != nil {
 		switch {
@@ -85,7 +79,9 @@ func (h *UserHandler) ChangeMyPassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.ChangePassword(c.Request.Context(), userID, req.CurrentPassword, req.NewPassword, req.ConfirmPassword); err != nil {
+	meta := getAuditMetaFromGin(c)
+
+	if err := h.userService.ChangePassword(c.Request.Context(), meta, userID, req.CurrentPassword, req.NewPassword, req.ConfirmPassword); err != nil {
 		switch {
 		case errors.Is(err, services.ErrUnauthorized):
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -115,22 +111,6 @@ func (h *UserHandler) ChangeMyPassword(c *gin.Context) {
 }
 
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
-	userIDValue, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "unauthorized",
-		})
-		return
-	}
-
-	userID, ok := userIDValue.(uuid.UUID)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid user id in token",
-		})
-		return
-	}
-
 	req := &dto.UpdateUserRequest{}
 
 	if err := c.ShouldBindJSON(req); err != nil {
@@ -146,7 +126,15 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		DOB:       &req.DOB.Time,
 	}
 
-	user, err := h.userService.UpdateProfile(c.Request.Context(), userID, input)
+	meta := getAuditMetaFromGin(c)
+	actor, err := getActorFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+	user, err := h.userService.UpdateProfile(c.Request.Context(), meta, actor, actor.ID, input)
 
 	if err != nil {
 		switch {

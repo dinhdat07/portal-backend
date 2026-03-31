@@ -10,8 +10,10 @@ import (
 )
 
 type Claims struct {
-	UserID uuid.UUID       `json:"user_id"`
-	Role   models.UserRole `json:"role"`
+	UserID   uuid.UUID       `json:"user_id"`
+	Username string          `json:"username"`
+	Email    string          `json:"email"`
+	Role     models.UserRole `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -25,10 +27,12 @@ func New(secret string, ttlSec int) *Manager {
 	return &Manager{[]byte(secret), tokenTTL}
 }
 
-func (m *Manager) Generate(userID uuid.UUID, role models.UserRole) (string, error) {
+func (m *Manager) Generate(userID uuid.UUID, role models.UserRole, email string, username string) (string, error) {
 	claims := Claims{
-		UserID: userID,
-		Role:   role,
+		UserID:   userID,
+		Username: username,
+		Role:     role,
+		Email:    email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

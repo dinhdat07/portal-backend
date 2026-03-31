@@ -24,7 +24,10 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	err := h.service.Register(c.Request.Context(), req.Email, req.Username, req.Password, req.FirstName, req.LastName, req.Dob.Time)
+	meta := getAuditMetaFromGin(c)
+
+	err := h.service.Register(c.Request.Context(), meta, req.Email, req.Username, req.Password, req.FirstName, req.LastName, req.Dob.Time)
+
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrEmailExists),
@@ -57,8 +60,11 @@ func (h *AuthHandler) LogIn(c *gin.Context) {
 		return
 	}
 
+	meta := getAuditMetaFromGin(c)
+
 	result, err := h.service.LogIn(
 		c.Request.Context(),
+		meta,
 		req.Identifier,
 		req.Password,
 	)

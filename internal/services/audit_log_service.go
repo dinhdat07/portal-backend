@@ -2,23 +2,46 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"portal-system/internal/domain"
 	"portal-system/internal/models"
 	"portal-system/internal/repositories"
+
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 type AuditLogService struct {
 	repo *repositories.AuditLogRepository
+	// TODO: add app logger to log when audit logger have error
 }
 
 func NewAuditLogService(repo *repositories.AuditLogRepository) *AuditLogService {
 	return &AuditLogService{repo: repo}
 }
 
-func (s *AuditLogService) Create(ctx context.Context, log *models.AuditLog) error {
-	if !log.Action.IsValid() {
-		return ErrInvalidAction
+func (s *AuditLogService) Log(ctx context.Context, meta *domain.AuditMeta, action models.ActionName, actor *models.User, target *models.User) error {
+	log := &models.AuditLog{Action: action}
+
+	if actor != nil {
+		log.ActorUserID = &actor.ID
+		log.ActorUsername = &actor.Username
+		log.ActorEmail = &actor.Email
+		log.ActorRole = &actor.Role
 	}
+
+	if target != nil {
+		log.TargetUserID = &target.ID
+		log.TargetUsername = &target.Username
+		log.TargetEmail = &target.Email
+		log.TargetRole = &target.Role
+	}
+
+	if meta != nil {
+		log.IPAddress = &meta.IPAddress
+		log.UserAgent = &meta.UserAgent
+	}
+
 	return s.repo.Create(ctx, log)
 }
 
@@ -43,4 +66,49 @@ func (s *AuditLogService) List(ctx context.Context, filter domain.AuditLogFilter
 	}
 
 	return logs, total, nil
+}
+
+func (svc *AuditLogService) LogWithMetadata(ctx context.Context, meta *domain.AuditMeta, action models.ActionName, actor *models.User, target *models.User, data map[string]any) error {
+	var metadata *datatypes.JSON
+	if data != nil {
+		b, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		m := datatypes.JSON(b)
+		metadata = &m
+	}
+
+	log := &models.AuditLog{
+		Action: action,
+	}
+
+	if actor != nil {
+		log.ActorUserID = &actor.ID
+		log.ActorUsername = &actor.Username
+		log.ActorEmail = &actor.Email
+		log.ActorRole = &actor.Role
+	}
+
+	if target != nil {
+		log.TargetUserID = &target.ID
+		log.TargetUsername = &target.Username
+		log.TargetEmail = &target.Email
+		log.TargetRole = &target.Role
+	}
+
+	if meta != nil {
+		log.IPAddress = &meta.IPAddress
+		log.UserAgent = &meta.UserAgent
+	}
+
+	log.Metadata = metadata
+
+	return svc.repo.Create(ctx, log)
+}
+
+func (s *AuditLogService) WithTx(tx *gorm.DB) *AuditLogService {
+	return &AuditLogService{
+		repo: s.repo.WithTx(tx),
+	}
 }
