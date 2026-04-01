@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"portal-system/internal/domain"
 	"portal-system/internal/dto"
@@ -27,6 +28,7 @@ func (h *UserHandler) GetMyProfile(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
 		})
+		log.Print(err)
 		return
 	}
 
@@ -148,7 +150,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 			})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "cannot load user info",
+				"error": "cannot update user info",
 			})
 		}
 		return

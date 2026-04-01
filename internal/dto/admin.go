@@ -19,15 +19,15 @@ type ListUsersQuery struct {
 
 type CreateUserRequest struct {
 	Email     string          `json:"email" binding:"required" format:"email"`
-	Username  string          `json:"username" binding:"required min=3 max=50"`
-	FirstName string          `json:"first_name" binding:"required max=100"`
-	LastName  string          `json:"last_name" binding:"required max=100"`
+	Username  string          `json:"username" binding:"required,min=3,max=50"`
+	FirstName string          `json:"first_name" binding:"required,max=100"`
+	LastName  string          `json:"last_name" binding:"required,max=100"`
 	DOB       *types.DateOnly `json:"dob,omitempty" binding:"required"`
 	Role      enum.UserRole   `json:"role" binding:"required"`
 }
 
 type UpdateUserRequest struct {
-	Username  *string         `json:"username,omitempty" binding:"min=3 max=50"`
+	Username  *string         `json:"username,omitempty" binding:"min=3,max=50"`
 	FirstName *string         `json:"first_name,omitempty" binding:"max=100"`
 	LastName  *string         `json:"last_name,omitempty" binding:"max=100"`
 	DOB       *types.DateOnly `json:"dob,omitempty"`

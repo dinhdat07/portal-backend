@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"portal-system/internal/domain"
@@ -74,7 +75,15 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	err := r.db.WithContext(ctx).
 		Where("username = ?", username).
 		First(&user).Error
-	return &user, err
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }
 
 func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID, deletedBy uuid.UUID) error {
