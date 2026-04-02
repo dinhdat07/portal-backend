@@ -87,6 +87,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 				"error": "cannot list users",
 			})
 		}
+		return
 	}
 
 	data := make([]dto.UserResponse, 0, len(result.Users))
@@ -131,8 +132,11 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		Username:  req.Username,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		DOB:       &req.DOB.Time,
+		Password:  req.Password,
 		Role:      req.Role,
+	}
+	if req.DOB != nil {
+		input.DOB = &req.DOB.Time
 	}
 
 	user, err := h.adminSvc.CreateUser(c.Request.Context(), meta, actor, input)
@@ -142,6 +146,11 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "invalid input",
 			})
+		case errors.Is(err, services.ErrEmailExists),
+			errors.Is(err, services.ErrUsernameExists):
+			c.JSON(http.StatusConflict, gin.H{
+				"error": err.Error(),
+			})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "cannot create user",
@@ -150,7 +159,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.ToUserResponse(user))
+	c.JSON(http.StatusCreated, dto.ToUserResponse(user))
 }
 func (h *AdminHandler) GetUserDetail(c *gin.Context) {
 	userIDValue := c.Param("userId")
@@ -220,13 +229,19 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid input",
 		})
+		return
+	}
+
+	var dob *time.Time
+	if req.DOB != nil {
+		dob = &req.DOB.Time
 	}
 
 	input := domain.UpdateUserInput{
 		Username:  req.Username,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		DOB:       &req.DOB.Time,
+		DOB:       dob,
 	}
 
 	meta := getAuditMetaFromGin(c)
@@ -244,6 +259,10 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		switch {
 		case errors.Is(err, services.ErrUserNotFound):
 			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		case errors.Is(err, services.ErrUsernameExists):
+			c.JSON(http.StatusConflict, gin.H{
 				"error": err.Error(),
 			})
 		default:
@@ -323,6 +342,7 @@ func (h *AdminHandler) RestoreUser(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
 		})
+		return
 	}
 
 	user, err := h.adminSvc.RestoreUser(c.Request.Context(), meta, actor, userID)
@@ -331,6 +351,10 @@ func (h *AdminHandler) RestoreUser(c *gin.Context) {
 		switch {
 		case errors.Is(err, services.ErrUserNotFound):
 			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		case errors.Is(err, services.ErrUserNotDeleted):
+			c.JSON(http.StatusConflict, gin.H{
 				"error": err.Error(),
 			})
 		default:
@@ -366,6 +390,7 @@ func (h *AdminHandler) UpdateRole(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid input",
 		})
+		return
 	}
 
 	meta := getAuditMetaFromGin(c)
@@ -374,12 +399,17 @@ func (h *AdminHandler) UpdateRole(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
 		})
+		return
 	}
 
 	user, err := h.adminSvc.UpdateRole(c.Request.Context(), meta, actor, userID, req.Role)
 
 	if err != nil {
 		switch {
+		case errors.Is(err, services.ErrInvalidInput):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
 		case errors.Is(err, services.ErrUserNotFound):
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": err.Error(),

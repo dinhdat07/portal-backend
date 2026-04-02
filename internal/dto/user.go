@@ -34,15 +34,31 @@ type ChangePasswordRequest struct {
 }
 
 func ToUserResponse(user *models.User) UserResponse {
+	var deletedAt *time.Time
+	if user.DeletedAt.Valid {
+		deletedAt = &user.DeletedAt.Time
+	}
+
+	var deletedBy *string
+	if user.DeletedBy != nil {
+		value := user.DeletedBy.String()
+		deletedBy = &value
+	}
+
 	return UserResponse{
-		ID:        user.ID.String(),
-		Email:     user.Email,
-		Username:  user.Username,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		Role:      user.Role,
-		Status:    user.Status,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
+		ID:              user.ID.String(),
+		Email:           user.Email,
+		Username:        user.Username,
+		FirstName:       user.FirstName,
+		LastName:        user.LastName,
+		DOB:             user.DOB,
+		Role:            user.Role,
+		Status:          user.Status,
+		EmailVerifiedAt: user.EmailVerifiedAt,
+		LastLoginAt:     user.LastLoginAt,
+		CreatedAt:       user.CreatedAt,
+		UpdatedAt:       user.UpdatedAt,
+		DeletedAt:       deletedAt,
+		DeletedBy:       deletedBy,
 	}
 }

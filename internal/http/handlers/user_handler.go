@@ -6,6 +6,7 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/dto"
 	"portal-system/internal/services"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -117,13 +118,19 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid input",
 		})
+		return
+	}
+
+	var dob *time.Time
+	if req.DOB != nil {
+		dob = &req.DOB.Time
 	}
 
 	input := domain.UpdateUserInput{
 		Username:  req.Username,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		DOB:       &req.DOB.Time,
+		DOB:       dob,
 	}
 
 	meta := getAuditMetaFromGin(c)
@@ -144,6 +151,10 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 			})
 		case errors.Is(err, services.ErrUserNotFound):
 			c.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
+			})
+		case errors.Is(err, services.ErrUsernameExists):
+			c.JSON(http.StatusConflict, gin.H{
 				"error": err.Error(),
 			})
 		default:

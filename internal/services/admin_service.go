@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -78,20 +79,36 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 		return nil, ErrInvalidInput
 	}
 
-	user := &models.User{
-		Email:        in.Email,
-		Username:     in.Username,
-		FirstName:    in.FirstName,
-		LastName:     in.LastName,
-		DOB:          in.DOB,
-		PasswordHash: nil,
-		Role:         "user",
-		Status:       enum.StatusPending,
+	existingByEmail, _ := svc.userRepo.FindByEmail(ctx, in.Email)
+	if existingByEmail != nil && existingByEmail.ID != uuid.Nil {
+		return nil, ErrEmailExists
 	}
 
-	err := svc.userRepo.Create(ctx, user)
+	existingByUsername, err := svc.userRepo.FindByUsername(ctx, in.Username)
 	if err != nil {
 		return nil, ErrInternalServer
+	}
+	if existingByUsername != nil && existingByUsername.ID != uuid.Nil {
+		return nil, ErrUsernameExists
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+	hashStr := string(hash)
+	now := time.Now()
+
+	user := &models.User{
+		Email:           in.Email,
+		Username:        in.Username,
+		FirstName:       in.FirstName,
+		LastName:        in.LastName,
+		DOB:             in.DOB,
+		PasswordHash:    &hashStr,
+		Role:            in.Role,
+		Status:          enum.StatusActive,
+		EmailVerifiedAt: &now,
 	}
 
 	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -105,6 +122,10 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 		}
 		return nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	return user, nil
 }
