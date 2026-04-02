@@ -56,7 +56,7 @@ func New() (*App, error) {
 	auditLogService := services.NewAuditLogService(auditLogRepo)
 	authService := services.NewAuthService(db, userRepo, tokenRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl)
 	userService := services.NewUserService(db, userRepo, auditLogService)
-	adminService := services.NewAdminService(db, userRepo, auditLogService)
+	adminService := services.NewAdminService(db, userRepo, tokenRepo, auditLogService, emailService, cfg.FrontEndUrl)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
@@ -114,6 +114,6 @@ func (a *App) Run() error {
 
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
-		&models.User{}, &models.AuditLog{},
+		&models.User{}, &models.AuditLog{}, &models.UserToken{},
 	)
 }

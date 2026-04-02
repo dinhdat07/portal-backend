@@ -359,7 +359,7 @@ paths:
           description: Internal server error
     post:
       tags: [Admin]
-      summary: Admin creates a new user
+      summary: Admin creates a new user and sends a set-password email
       operationId: adminCreateUser
       security:
         - bearerAuth: []
@@ -371,7 +371,7 @@ paths:
               $ref: '#/components/schemas/AdminCreateUserRequest'
       responses:
         '201':
-          description: User created
+          description: User created and set-password email sent
           content:
             application/json:
               schema:

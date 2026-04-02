@@ -41,4 +41,5 @@ var (
 	ErrAuditLogger            = errors.New("cannot log this action")
 	ErrSendVerificationEmail  = errors.New("cannot send verification email")
 	ErrSendResetPasswordEmail = errors.New("cannot send reset password email")
+	ErrSendSetPasswordEmail   = errors.New("cannot send set password email")
 )
