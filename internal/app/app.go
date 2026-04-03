@@ -61,7 +61,7 @@ func New() (*App, error) {
 	authHandler := handlers.NewAuthHandler(authService, cfg)
 	userHandler := handlers.NewUserHandler(userService)
 	adminHandler := handlers.NewAdminHandler(adminService, userService)
-	router := setupRouter(authHandler, userHandler, adminHandler, tokenManager, cfg.AuthCookieName)
+	router := setupRouter(authHandler, userHandler, adminHandler, tokenManager, cfg)
 
 	if cfg.Env == "development" {
 		if err := seedAdmin(db, cfg); err != nil {

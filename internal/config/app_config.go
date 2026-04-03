@@ -22,6 +22,8 @@ type Config struct {
 	AuthCookieDomain   string
 	AuthCookieSecure   bool
 	AuthCookieSameSite string
+	CSRFCookieName     string
+	CSRFHeaderName     string
 }
 
 func Load() (*Config, error) {
@@ -48,6 +50,16 @@ func Load() (*Config, error) {
 		cookieSecure = os.Getenv("ENV") != "development"
 	}
 
+	csrfCookieName := os.Getenv("CSRF_COOKIE_NAME")
+	if csrfCookieName == "" {
+		csrfCookieName = "portal_csrf_token"
+	}
+
+	csrfHeaderName := os.Getenv("CSRF_HEADER_NAME")
+	if csrfHeaderName == "" {
+		csrfHeaderName = "X-CSRF-Token"
+	}
+
 	return &Config{
 		DBUrl:              os.Getenv("DB_URL"),
 		JWTSecret:          os.Getenv("JWT_SECRET"),
@@ -62,5 +74,7 @@ func Load() (*Config, error) {
 		AuthCookieDomain:   os.Getenv("AUTH_COOKIE_DOMAIN"),
 		AuthCookieSecure:   cookieSecure,
 		AuthCookieSameSite: cookieSameSite,
+		CSRFCookieName:     csrfCookieName,
+		CSRFHeaderName:     csrfHeaderName,
 	}, nil
 }

@@ -7,6 +7,7 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/dto"
+	"portal-system/internal/platform/token"
 	"portal-system/internal/services"
 	"strings"
 
@@ -56,6 +57,32 @@ func (h *AuthHandler) clearAuthCookie(c *gin.Context) {
 		h.config.AuthCookieDomain,
 		h.config.AuthCookieSecure,
 		true,
+	)
+}
+
+func (h *AuthHandler) setCSRFCookie(c *gin.Context, value string, maxAge int) {
+	c.SetSameSite(parseSameSite(h.config.AuthCookieSameSite))
+	c.SetCookie(
+		h.config.CSRFCookieName,
+		value,
+		maxAge,
+		"/",
+		h.config.AuthCookieDomain,
+		h.config.AuthCookieSecure,
+		false,
+	)
+}
+
+func (h *AuthHandler) clearCSRFCookie(c *gin.Context) {
+	c.SetSameSite(parseSameSite(h.config.AuthCookieSameSite))
+	c.SetCookie(
+		h.config.CSRFCookieName,
+		"",
+		-1,
+		"/",
+		h.config.AuthCookieDomain,
+		h.config.AuthCookieSecure,
+		false,
 	)
 }
 
@@ -139,7 +166,16 @@ func (h *AuthHandler) LogIn(c *gin.Context) {
 		}
 	}
 
+	csrfToken, err := token.GenerateSecureToken(32)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
+		})
+		return
+	}
+
 	h.setAuthCookie(c, result.AccessToken, result.ExpiresIn)
+	h.setCSRFCookie(c, csrfToken, result.ExpiresIn)
 
 	c.JSON(http.StatusOK, dto.LoginResponse{
 		ExpiresIn: result.ExpiresIn,
@@ -149,6 +185,7 @@ func (h *AuthHandler) LogIn(c *gin.Context) {
 
 func (h *AuthHandler) LogOut(c *gin.Context) {
 	h.clearAuthCookie(c)
+	h.clearCSRFCookie(c)
 	c.JSON(http.StatusOK, dto.AuthMessageResponse{Message: "Logged out"})
 }
 
