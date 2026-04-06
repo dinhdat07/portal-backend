@@ -1,4 +1,4 @@
-package handlers
+package reqctx
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func getAuditMetaFromGin(c *gin.Context) *domain.AuditMeta {
+func GetAuditMetaFromGin(c *gin.Context) *domain.AuditMeta {
 	ip := c.ClientIP()
 	userAgent := c.GetHeader("User-Agent")
 
@@ -20,7 +20,7 @@ func getAuditMetaFromGin(c *gin.Context) *domain.AuditMeta {
 	}
 }
 
-func getActorFromGin(c *gin.Context) (*models.User, error) {
+func GetActorFromGin(c *gin.Context) (*models.User, error) {
 	userIDValue, ok := c.Get("user_id")
 	if !ok {
 		return nil, errors.New("missing user_id in context")

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"portal-system/internal/domain"
 	"portal-system/internal/dto"
+	"portal-system/internal/http/reqctx"
 	"portal-system/internal/services"
 	"time"
 
@@ -22,8 +23,8 @@ func NewUserHandler(service *services.UserService) *UserHandler {
 
 func (h *UserHandler) GetMyProfile(c *gin.Context) {
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -80,7 +81,7 @@ func (h *UserHandler) ChangeMyPassword(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	if err := h.userService.ChangePassword(c.Request.Context(), meta, userID, req.CurrentPassword, req.NewPassword, req.ConfirmPassword); err != nil {
 		switch {
@@ -132,8 +133,8 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		DOB:       dob,
 	}
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",

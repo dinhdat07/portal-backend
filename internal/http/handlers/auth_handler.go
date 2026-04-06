@@ -6,6 +6,7 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/dto"
+	"portal-system/internal/http/reqctx"
 	"portal-system/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	err := h.service.Register(c.Request.Context(), meta, req.Email, req.Username, req.Password, req.FirstName, req.LastName, req.Dob.Time)
 
@@ -62,7 +63,7 @@ func (h *AuthHandler) LogIn(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	result, err := h.service.LogIn(
 		c.Request.Context(),
@@ -116,7 +117,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 	err := h.service.VerifyEmail(c.Request.Context(), meta, req.Token, enum.TokenTypeEmailVerification)
 
 	if err != nil {
@@ -152,7 +153,7 @@ func (h *AuthHandler) ResendVerification(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	if err := h.service.ResendVerification(c.Request.Context(), meta, req.Email, enum.TokenTypeEmailVerification); err != nil {
 		switch {
@@ -187,7 +188,7 @@ func (h *AuthHandler) SetPassword(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	input := &domain.SetPasswordInput{
 		Token:           req.Token,
@@ -235,7 +236,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	input := &domain.SetPasswordInput{
 		Token:           req.Token,
@@ -290,7 +291,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	err := h.service.ForgotPassword(c.Request.Context(), meta, req.Email)
 	if err != nil {

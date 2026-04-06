@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"portal-system/internal/auth"
 	"portal-system/internal/config"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/http/handlers"
@@ -49,6 +50,9 @@ func New() (*App, error) {
 
 	// init
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
+	authenticator := auth.NewAuthenticator(tokenManager)
+	authorizer := auth.NewAuthorizer()
+
 	userRepo := repositories.NewUserRepository(db)
 	auditLogRepo := repositories.NewAuditLogRepository(db)
 	tokenRepo := repositories.NewUserTokenRepository(db)
@@ -61,7 +65,7 @@ func New() (*App, error) {
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
 	adminHandler := handlers.NewAdminHandler(adminService, userService)
-	router := setupRouter(authHandler, userHandler, adminHandler, tokenManager)
+	router := setupRouter(authHandler, userHandler, adminHandler, authenticator, authorizer)
 
 	if cfg.Env == "development" {
 		if err := seedAdmin(db, cfg); err != nil {
