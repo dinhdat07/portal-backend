@@ -1,6 +1,7 @@
 package models
 
 import (
+	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"time"
 
@@ -14,15 +15,15 @@ type AuditLog struct {
 
 	Action enum.ActionName `gorm:"type:varchar(50);not null;index"`
 
-	ActorUserID   *uuid.UUID     `gorm:"type:uuid;index"`
-	ActorUsername *string        `gorm:"type:varchar(50)"`
-	ActorEmail    *string        `gorm:"type:varchar(255)"`
-	ActorRole     *enum.UserRole `gorm:"type:varchar(20)"`
+	ActorUserID   *uuid.UUID          `gorm:"type:uuid;index"`
+	ActorUsername *string             `gorm:"type:varchar(50)"`
+	ActorEmail    *string             `gorm:"type:varchar(255)"`
+	ActorRole     *constants.RoleCode `gorm:"type:varchar(20)"`
 
-	TargetUserID   *uuid.UUID     `gorm:"type:uuid;index"`
-	TargetUsername *string        `gorm:"type:varchar(50)"`
-	TargetEmail    *string        `gorm:"type:varchar(255)"`
-	TargetRole     *enum.UserRole `gorm:"type:varchar(20)"`
+	TargetUserID   *uuid.UUID          `gorm:"type:uuid;index"`
+	TargetUsername *string             `gorm:"type:varchar(50)"`
+	TargetEmail    *string             `gorm:"type:varchar(255)"`
+	TargetRole     *constants.RoleCode `gorm:"type:varchar(20)"`
 
 	Metadata  *datatypes.JSON `gorm:"type:jsonb"`
 	IPAddress *string         `gorm:"type:varchar(45)"`

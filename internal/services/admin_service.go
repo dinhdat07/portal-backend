@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"portal-system/internal/domain"
+	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
 	"portal-system/internal/platform/email"
@@ -22,6 +23,7 @@ type AdminService struct {
 	auditLogger *AuditLogService
 	userRepo    *repositories.UserRepository
 	tokenRepo   *repositories.UserTokenRepository
+	roleRepo    *repositories.RoleRepository
 	emailSvc    *email.SMTPEmailService
 	frontendURL string
 }
@@ -44,9 +46,13 @@ func NewAdminService(
 	}
 }
 
-func (svc *AdminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, actor *models.User, in domain.UsersFilter) (*domain.ListUsersResult, error) {
-	if in.Role != "" && !in.Role.IsValid() {
-		return nil, ErrInvalidInput
+func (svc *AdminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.UsersFilter) (*domain.ListUsersResult, error) {
+	if in.RoleCode != nil {
+		role, err := svc.roleRepo.FindByCode(ctx, *in.RoleCode)
+		if err != nil {
+			return nil, ErrInvalidInput
+		}
+		in.RoleID = &role.ID
 	}
 
 	if in.Status != "" && !in.Status.IsValid() {
@@ -64,7 +70,8 @@ func (svc *AdminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, 
 			"email":           in.Email,
 			"full_name":       in.FullName,
 			"dob":             in.Dob,
-			"role":            in.Role,
+			"role_code":       in.RoleCode,
+			"role_id":         in.RoleID,
 			"status":          in.Status,
 			"include_deleted": in.IncludeDeleted,
 		},
@@ -94,8 +101,8 @@ func (svc *AdminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, 
 
 }
 
-func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta, actor *models.User, in domain.CreateUserInput) (*models.User, error) {
-	if in.Role != "" && !in.Role.IsValid() {
+func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.CreateUserInput) (*models.User, error) {
+	if in.RoleCode != "" && !in.RoleCode.IsValid() {
 		return nil, ErrInvalidInput
 	}
 
@@ -117,13 +124,19 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 		return nil, err
 	}
 
+	role, err := svc.roleRepo.FindByCode(ctx, in.RoleCode)
+	if role == nil || err != nil {
+		return nil, ErrInternalServer
+	}
+
 	user := &models.User{
 		Email:     in.Email,
 		Username:  in.Username,
 		FirstName: in.FirstName,
 		LastName:  in.LastName,
 		DOB:       in.DOB,
-		Role:      in.Role,
+		RoleID:    role.ID,
+		Role:      *role,
 		Status:    enum.StatusPending,
 	}
 
@@ -154,7 +167,8 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 			return ErrSendSetPasswordEmail
 		}
 
-		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminCreateUser, actor, user); err != nil {
+		target := domain.MapUserToAuditUser(user)
+		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminCreateUser, actor, target); err != nil {
 			return ErrAuditLogger
 		}
 		return nil
@@ -167,7 +181,7 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 	return user, nil
 }
 
-func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta, actor *models.User, userID uuid.UUID) (*models.User, error) {
+func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -186,7 +200,8 @@ func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta,
 		user.DeletedBy = &actor.ID
 		user.Status = enum.StatusDeleted
 
-		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminDeleteUser, actor, user); err != nil {
+		target := domain.MapUserToAuditUser(user)
+		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminDeleteUser, actor, target); err != nil {
 			return ErrAuditLogger
 		}
 		return nil
@@ -199,7 +214,7 @@ func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta,
 	return user, nil
 }
 
-func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta, actor *models.User, userID uuid.UUID) (*models.User, error) {
+func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByIDUnscoped(ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -221,7 +236,8 @@ func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta
 		user.DeletedBy = nil
 		user.Status = enum.StatusActive
 
-		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminRestoreUser, actor, user); err != nil {
+		target := domain.MapUserToAuditUser(user)
+		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminRestoreUser, actor, target); err != nil {
 			return ErrAuditLogger
 		}
 
@@ -235,8 +251,8 @@ func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta
 	return user, nil
 }
 
-func (svc *AdminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta, actor *models.User, id uuid.UUID, role enum.UserRole) (*models.User, error) {
-	if !role.IsValid() {
+func (svc *AdminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, roleCode constants.RoleCode) (*models.User, error) {
+	if !roleCode.IsValid() {
 		return nil, ErrInvalidInput
 	}
 
@@ -248,11 +264,21 @@ func (svc *AdminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta,
 		return nil, err
 	}
 
-	if actor.ID != user.ID && user.Role == enum.RoleAdmin {
+	role, err := svc.roleRepo.FindByCode(ctx, roleCode)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	roleAdmin, err := svc.roleRepo.FindByCode(ctx, constants.RoleCodeAdmin)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	if actor.ID != user.ID && user.RoleID == roleAdmin.ID {
 		return nil, ErrForbidden
 	}
 
-	if user.Role == role {
+	if user.RoleID == role.ID {
 		return user, nil
 	}
 
@@ -263,12 +289,14 @@ func (svc *AdminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta,
 	}
 
 	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := svc.userRepo.WithTx(tx).UpdateRole(ctx, id, role); err != nil {
+		if err := svc.userRepo.WithTx(tx).UpdateRole(ctx, id, role.ID); err != nil {
 			return ErrInternalServer
 		}
-		user.Role = role
+		user.Role = *role
 
-		if err := svc.auditLogger.WithTx(tx).LogWithMetadata(ctx, meta, enum.ActionAdminAssignRole, actor, user, changes); err != nil {
+		target := domain.MapUserToAuditUser(user)
+
+		if err := svc.auditLogger.WithTx(tx).LogWithMetadata(ctx, meta, enum.ActionAdminAssignRole, actor, target, changes); err != nil {
 			return ErrAuditLogger
 		}
 

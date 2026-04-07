@@ -62,7 +62,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		Email:          query.Email,
 		FullName:       query.FullName,
 		Dob:            dob,
-		Role:           enum.UserRole(query.Role),
+		RoleCode:       query.RoleCode,
 		Status:         enum.UserStatus(query.Status),
 		IncludeDeleted: includeDeleted,
 	}
@@ -133,7 +133,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		Username:  req.Username,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		Role:      req.Role,
+		RoleCode:  req.RoleCode,
 	}
 	if req.DOB != nil {
 		input.DOB = &req.DOB.Time
@@ -402,7 +402,7 @@ func (h *AdminHandler) UpdateRole(c *gin.Context) {
 		return
 	}
 
-	user, err := h.adminSvc.UpdateRole(c.Request.Context(), meta, actor, userID, req.Role)
+	user, err := h.adminSvc.UpdateRole(c.Request.Context(), meta, actor, userID, req.RoleCode)
 
 	if err != nil {
 		switch {

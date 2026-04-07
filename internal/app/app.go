@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"portal-system/internal/auth"
 	"portal-system/internal/config"
+	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/http/handlers"
 	"portal-system/internal/models"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -68,6 +70,9 @@ func New() (*App, error) {
 	router := setupRouter(authHandler, userHandler, adminHandler, authenticator, authorizer)
 
 	if cfg.Env == "development" {
+		if err := seedRoles(db); err != nil {
+			return nil, err
+		}
 		if err := seedAdmin(db, cfg); err != nil {
 			return nil, err
 		}
@@ -98,18 +103,49 @@ func seedAdmin(db *gorm.DB, cfg *config.Config) error {
 	hashStr := string(hash)
 	now := time.Now()
 
+	var role models.Role
+	if err := db.Where("code = ?", constants.RoleCodeAdmin).First(&role).Error; err != nil {
+		return err
+	}
+
 	admin := &models.User{
 		Email:           cfg.AdminEmail,
 		Username:        "admin",
 		FirstName:       "System",
 		LastName:        "Admin",
 		PasswordHash:    &hashStr,
-		Role:            enum.RoleAdmin,
+		RoleID:          role.ID,
 		Status:          enum.StatusActive,
 		EmailVerifiedAt: &now,
 	}
 
 	return db.Create(admin).Error
+}
+
+func seedRoles(db *gorm.DB) error {
+	roles := []models.Role{
+		{
+			ID:   uuid.New(),
+			Code: constants.RoleCodeAdmin,
+			Name: "Admin",
+		},
+		{
+			ID:   uuid.New(),
+			Code: constants.RoleCodeUser,
+			Name: "User",
+		},
+	}
+
+	for _, r := range roles {
+		err := db.
+			Where("code = ?", r.Code).
+			FirstOrCreate(&r).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (a *App) Run() error {
@@ -118,6 +154,6 @@ func (a *App) Run() error {
 
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
-		&models.User{}, &models.AuditLog{}, &models.UserToken{},
+		&models.User{}, &models.AuditLog{}, &models.UserToken{}, &models.Role{}, &models.Permission{},
 	)
 }

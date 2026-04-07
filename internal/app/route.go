@@ -2,6 +2,7 @@ package app
 
 import (
 	"portal-system/internal/auth"
+	"portal-system/internal/domain/constants"
 	"portal-system/internal/http/handlers"
 	"portal-system/internal/http/middleware"
 
@@ -41,9 +42,9 @@ func setupRouter(
 			me := users.Group("/me")
 			{
 				// authorization phase by permission
-				me.GET("", middleware.RequirePermission(authorizer, auth.PermProfileReadSelf), userHandler.GetMyProfile)
-				me.PUT("", middleware.RequirePermission(authorizer, auth.PermProfileUpdateSelf), userHandler.UpdateProfile)
-				me.PUT("/change-password", middleware.RequirePermission(authorizer, auth.PermProfileChangePassword), userHandler.ChangeMyPassword)
+				me.GET("", middleware.RequirePermission(authorizer, constants.PermProfileReadSelf), userHandler.GetMyProfile)
+				me.PUT("", middleware.RequirePermission(authorizer, constants.PermProfileUpdateSelf), userHandler.UpdateProfile)
+				me.PUT("/change-password", middleware.RequirePermission(authorizer, constants.PermProfileChangePassword), userHandler.ChangeMyPassword)
 			}
 		}
 
@@ -51,16 +52,16 @@ func setupRouter(
 		{
 			adminUsers := admin.Group("/users")
 			{
-				adminUsers.GET("", middleware.RequirePermission(authorizer, auth.PermUserList), adminHandler.ListUsers)
-				adminUsers.POST("", middleware.RequirePermission(authorizer, auth.PermUserCreate), adminHandler.CreateUser)
+				adminUsers.GET("", middleware.RequirePermission(authorizer, constants.PermUserList), adminHandler.ListUsers)
+				adminUsers.POST("", middleware.RequirePermission(authorizer, constants.PermUserCreate), adminHandler.CreateUser)
 
 				adminUser := adminUsers.Group("/:userId")
 				{
-					adminUser.GET("", middleware.RequirePermission(authorizer, auth.PermUserReadDetail), adminHandler.GetUserDetail)
-					adminUser.PUT("", middleware.RequirePermission(authorizer, auth.PermUserUpdate), adminHandler.UpdateUser)
-					adminUser.DELETE("/delete", middleware.RequirePermission(authorizer, auth.PermUserDelete), adminHandler.DeleteUser)
-					adminUser.PUT("/restore", middleware.RequirePermission(authorizer, auth.PermUserRestore), adminHandler.RestoreUser)
-					adminUser.PUT("/role", middleware.RequirePermission(authorizer, auth.PermUserRoleUpdate), adminHandler.UpdateRole)
+					adminUser.GET("", middleware.RequirePermission(authorizer, constants.PermUserReadDetail), adminHandler.GetUserDetail)
+					adminUser.PUT("", middleware.RequirePermission(authorizer, constants.PermUserUpdate), adminHandler.UpdateUser)
+					adminUser.DELETE("/delete", middleware.RequirePermission(authorizer, constants.PermUserDelete), adminHandler.DeleteUser)
+					adminUser.PUT("/restore", middleware.RequirePermission(authorizer, constants.PermUserRestore), adminHandler.RestoreUser)
+					adminUser.PUT("/role", middleware.RequirePermission(authorizer, constants.PermUserRoleUpdate), adminHandler.UpdateRole)
 				}
 			}
 		}

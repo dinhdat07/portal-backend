@@ -3,11 +3,9 @@ package reqctx
 import (
 	"errors"
 	"portal-system/internal/domain"
-	"portal-system/internal/domain/enum"
-	"portal-system/internal/models"
+	"portal-system/internal/domain/constants"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 func GetAuditMetaFromGin(c *gin.Context) *domain.AuditMeta {
@@ -20,51 +18,21 @@ func GetAuditMetaFromGin(c *gin.Context) *domain.AuditMeta {
 	}
 }
 
-func GetActorFromGin(c *gin.Context) (*models.User, error) {
-	userIDValue, ok := c.Get("user_id")
-	if !ok {
-		return nil, errors.New("missing user_id in context")
+func GetActorFromGin(c *gin.Context) (*domain.AuditUser, error) {
+	principal, exists := GetPrincipal(c)
+	if principal == nil || !exists {
+		return nil, errors.New("missing principal in context")
 	}
 
-	usernameValue, ok := c.Get("username")
-	if !ok {
-		return nil, errors.New("missing username in context")
+	role := constants.RoleCode(principal.RoleCode)
+	if !role.IsValid() {
+		return nil, errors.New("invalid role in principal")
 	}
 
-	emailValue, ok := c.Get("email")
-	if !ok {
-		return nil, errors.New("missing email in context")
-	}
-
-	roleValue, ok := c.Get("role")
-	if !ok {
-		return nil, errors.New("missing role in context")
-	}
-
-	userID, ok := userIDValue.(uuid.UUID)
-	if !ok {
-		return nil, errors.New("invalid user_id type")
-	}
-
-	username, ok := usernameValue.(string)
-	if !ok {
-		return nil, errors.New("invalid username type")
-	}
-
-	email, ok := emailValue.(string)
-	if !ok {
-		return nil, errors.New("invalid email type")
-	}
-
-	role, ok := roleValue.(enum.UserRole)
-	if !ok {
-		return nil, errors.New("invalid role type")
-	}
-
-	return &models.User{
-		ID:       userID,
-		Username: username,
-		Email:    email,
-		Role:     role,
+	return &domain.AuditUser{
+		ID:       principal.UserID,
+		Username: principal.Username,
+		Email:    principal.Email,
+		RoleCode: role,
 	}, nil
 }

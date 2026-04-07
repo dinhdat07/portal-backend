@@ -46,7 +46,7 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 
 func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	var user models.User
-	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("Role").First(&user, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Us
 
 func (r *UserRepository) FindByIDUnscoped(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	var user models.User
-	err := r.db.WithContext(ctx).Unscoped().First(&user, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("Role").Unscoped().First(&user, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (r *UserRepository) FindByIDUnscoped(ctx context.Context, id uuid.UUID) (*m
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
-	err := r.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).Preload("Role").
 		Where("email = ?", email).
 		First(&user).Error
 
@@ -80,7 +80,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*models.User, error) {
 	var user models.User
-	err := r.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).Preload("Role").
 		Where("username = ?", username).
 		First(&user).Error
 
@@ -134,8 +134,8 @@ func (r *UserRepository) ListUsers(ctx context.Context, filter domain.UsersFilte
 		db = db.Where("dob = ?", *filter.Dob)
 	}
 
-	if filter.Role != "" {
-		db = db.Where("role = ?", filter.Role)
+	if filter.RoleID != nil {
+		db = db.Where("role_id = ?", *filter.RoleID)
 	}
 
 	if filter.Status != "" {
@@ -169,11 +169,11 @@ func (r *UserRepository) Restore(ctx context.Context, id uuid.UUID) error {
 		}).Error
 }
 
-func (r *UserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role enum.UserRole) error {
+func (r *UserRepository) UpdateRole(ctx context.Context, id uuid.UUID, roleID uuid.UUID) error {
 	return r.db.WithContext(ctx).
 		Model(&models.User{}).
 		Where("id = ?", id).
-		Update("role", role).Error
+		Update("role_id", roleID).Error
 }
 
 func (r *UserRepository) MarkEmailVerified(ctx context.Context, id uuid.UUID) error {

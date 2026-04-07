@@ -22,21 +22,21 @@ func NewAuditLogService(repo *repositories.AuditLogRepository) *AuditLogService 
 	return &AuditLogService{repo: repo}
 }
 
-func (s *AuditLogService) Log(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *models.User, target *models.User) error {
+func (s *AuditLogService) Log(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser) error {
 	log := &models.AuditLog{Action: action}
 
 	if actor != nil {
 		log.ActorUserID = &actor.ID
 		log.ActorUsername = &actor.Username
 		log.ActorEmail = &actor.Email
-		log.ActorRole = &actor.Role
+		log.ActorRole = &actor.RoleCode
 	}
 
 	if target != nil {
 		log.TargetUserID = &target.ID
 		log.TargetUsername = &target.Username
 		log.TargetEmail = &target.Email
-		log.TargetRole = &target.Role
+		log.TargetRole = &target.RoleCode
 	}
 
 	if meta != nil {
@@ -74,7 +74,7 @@ func (s *AuditLogService) List(ctx context.Context, filter domain.AuditLogFilter
 	return logs, total, nil
 }
 
-func (svc *AuditLogService) LogWithMetadata(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *models.User, target *models.User, data map[string]any) error {
+func (svc *AuditLogService) LogWithMetadata(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser, data map[string]any) error {
 	var metadata *datatypes.JSON
 	if data != nil {
 		b, err := json.Marshal(data)
@@ -93,14 +93,14 @@ func (svc *AuditLogService) LogWithMetadata(ctx context.Context, meta *domain.Au
 		log.ActorUserID = &actor.ID
 		log.ActorUsername = &actor.Username
 		log.ActorEmail = &actor.Email
-		log.ActorRole = &actor.Role
+		log.ActorRole = &actor.RoleCode
 	}
 
 	if target != nil {
 		log.TargetUserID = &target.ID
 		log.TargetUsername = &target.Username
 		log.TargetEmail = &target.Email
-		log.TargetRole = &target.Role
+		log.TargetRole = &target.RoleCode
 	}
 
 	if meta != nil {

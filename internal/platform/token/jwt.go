@@ -2,7 +2,6 @@ package token
 
 import (
 	"errors"
-	"portal-system/internal/domain/enum"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -10,10 +9,11 @@ import (
 )
 
 type Claims struct {
-	UserID   uuid.UUID     `json:"user_id"`
-	Username string        `json:"username"`
-	Email    string        `json:"email"`
-	Role     enum.UserRole `json:"role"`
+	UserID   uuid.UUID `json:"user_id"`
+	Username string    `json:"username"`
+	Email    string    `json:"email"`
+	RoleID   uuid.UUID `json:"role_id"`
+	RoleCode string    `json:"role_code"`
 	jwt.RegisteredClaims
 }
 
@@ -27,11 +27,12 @@ func New(secret string, ttlSec int) *Manager {
 	return &Manager{[]byte(secret), tokenTTL}
 }
 
-func (m *Manager) Generate(userID uuid.UUID, role enum.UserRole, email string, username string) (string, error) {
+func (m *Manager) Generate(userID uuid.UUID, roleId uuid.UUID, roleCode string, email string, username string) (string, error) {
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
-		Role:     role,
+		RoleID:   roleId,
+		RoleCode: roleCode,
 		Email:    email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.tokenTTL)),

@@ -1,5 +1,10 @@
 package auth
 
+import (
+	"context"
+	"portal-system/internal/domain/constants"
+)
+
 type Authorizer struct {
 }
 
@@ -7,17 +12,11 @@ func NewAuthorizer() *Authorizer {
 	return &Authorizer{}
 }
 
-func (a *Authorizer) HasPermission(principal *Principal, permission Permission) bool {
-	if principal == nil {
-		return false
+func (a *Authorizer) HasPermission(ctx context.Context, principal *Principal, permission constants.PermissionCode) bool {
+	for _, p := range principal.Permissions {
+		if p == string(permission) {
+			return true
+		}
 	}
-
-	role := principal.Role
-	perms, ok := rolePermissions[role]
-	if !ok {
-		return false
-	}
-
-	_, ok = perms[permission]
-	return ok
+	return false
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"portal-system/internal/domain"
+	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
 	"portal-system/internal/repositories"
@@ -17,6 +18,7 @@ import (
 type UserService struct {
 	db          *gorm.DB
 	auditLogger *AuditLogService
+	roleRepo    *repositories.RoleRepository
 	userRepo    *repositories.UserRepository
 }
 
@@ -24,7 +26,7 @@ func NewUserService(db *gorm.DB, repo *repositories.UserRepository, logger *Audi
 	return &UserService{db: db, userRepo: repo, auditLogger: logger}
 }
 
-func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *models.User, id uuid.UUID) (*models.User, error) {
+func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -33,8 +35,9 @@ func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, 
 		return nil, err
 	}
 
-	if actor.Role == enum.RoleAdmin {
-		svc.auditLogger.Log(ctx, meta, enum.ActionAdminViewUser, actor, user)
+	if actor.RoleCode == constants.RoleCodeAdmin {
+		target := domain.MapUserToAuditUser(user)
+		svc.auditLogger.Log(ctx, meta, enum.ActionAdminViewUser, actor, target)
 	}
 
 	return user, nil
@@ -80,7 +83,9 @@ func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMe
 		if err := svc.userRepo.WithTx(tx).UpdatePassword(ctx, id, string(hashed)); err != nil {
 			return ErrInternalServer
 		}
-		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionChangePassword, user, user); err != nil {
+
+		actor := domain.MapUserToAuditUser(user)
+		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionChangePassword, actor, actor); err != nil {
 			return ErrAuditLogger
 		}
 		return nil
@@ -90,7 +95,7 @@ func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMe
 
 }
 
-func (svc *UserService) UpdateProfile(ctx context.Context, meta *domain.AuditMeta, actor *models.User, id uuid.UUID, input domain.UpdateUserInput) (*models.User, error) {
+func (svc *UserService) UpdateProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, input domain.UpdateUserInput) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -99,7 +104,12 @@ func (svc *UserService) UpdateProfile(ctx context.Context, meta *domain.AuditMet
 		return nil, err
 	}
 
-	if actor.ID != user.ID && user.Role == enum.RoleAdmin {
+	roleAdmin, err := svc.roleRepo.FindByCode(ctx, constants.RoleCodeAdmin)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	if actor.ID != user.ID && user.RoleID == roleAdmin.ID {
 		return nil, ErrForbidden
 	}
 
@@ -150,11 +160,12 @@ func (svc *UserService) UpdateProfile(ctx context.Context, meta *domain.AuditMet
 		}
 
 		action := enum.ActionUpdateProfile
-		if actor.Role == enum.RoleAdmin {
+		if actor.RoleCode == constants.RoleCodeAdmin {
 			action = enum.ActionAdminUpdateUser
 		}
 
-		err := svc.auditLogger.WithTx(tx).LogWithMetadata(ctx, meta, action, actor, user, map[string]any{
+		target := domain.MapUserToAuditUser(user)
+		err := svc.auditLogger.WithTx(tx).LogWithMetadata(ctx, meta, action, actor, target, map[string]any{
 			"changes": changes,
 		})
 		if err != nil {

@@ -18,7 +18,7 @@ func AuthenticationMiddleware(authenticator *auth.Authenticator) gin.HandlerFunc
 			return
 		}
 
-		principal, err := authenticator.Authenticate(tokenString)
+		principal, err := authenticator.Authenticate(c.Request.Context(), tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorize format"})
 			return

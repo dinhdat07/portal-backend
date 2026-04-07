@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"portal-system/internal/domain"
+	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
 	"portal-system/internal/platform/email"
@@ -26,6 +27,7 @@ type AuthService struct {
 	auditLogger     *AuditLogService
 	userRepo        *repositories.UserRepository
 	tokenRepo       *repositories.UserTokenRepository
+	roleRepo        *repositories.RoleRepository
 	tokenManager    *token.Manager
 	emailService    *email.SMTPEmailService
 	frontendBaseURL string
@@ -56,7 +58,11 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 		return err
 	}
 
-	// currently set auto active (no verify needed) for easy testing
+	role, err := s.roleRepo.FindByCode(ctx, constants.RoleCodeUser)
+	if role == nil || err != nil {
+		return ErrInternalServer
+	}
+
 	user := &models.User{
 		Email:        email,
 		Username:     username,
@@ -64,7 +70,8 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 		LastName:     lastName,
 		DOB:          &dob,
 		PasswordHash: &hashStr,
-		Role:         enum.RoleUser,
+		RoleID:       role.ID,
+		Role:         *role,
 		Status:       enum.StatusPending,
 	}
 
@@ -96,7 +103,8 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 			return ErrSendVerificationEmail
 		}
 
-		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionRegister, nil, user)
+		target := domain.MapUserToAuditUser(user)
+		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionRegister, nil, target)
 	})
 
 	if err != nil {
@@ -137,13 +145,14 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 		return nil, ErrAccountDeleted
 	}
 
-	token, err := s.tokenManager.Generate(user.ID, user.Role, user.Email, user.Username)
+	token, err := s.tokenManager.Generate(user.ID, user.Role.ID, string(user.Role.Code), user.Email, user.Username)
 	if err != nil {
 		return nil, err
 	}
 
 	// best-effort
-	s.auditLogger.Log(ctx, meta, enum.ActionLogin, user, nil)
+	actor := domain.MapUserToAuditUser(user)
+	s.auditLogger.Log(ctx, meta, enum.ActionLogin, actor, nil)
 
 	return &domain.LoginResult{
 		AccessToken: token,
@@ -182,7 +191,8 @@ func (s *AuthService) VerifyEmail(ctx context.Context, meta *domain.AuditMeta, r
 			return err
 		}
 
-		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionVerifyEmail, user, user)
+		actor := domain.MapUserToAuditUser(user)
+		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionVerifyEmail, actor, actor)
 	})
 	if err != nil {
 		return ErrInternalServer
@@ -226,7 +236,8 @@ func (s *AuthService) ResendVerification(ctx context.Context, meta *domain.Audit
 			return ErrSendVerificationEmail
 		}
 
-		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionResendVerification, user, user)
+		actor := domain.MapUserToAuditUser(user)
+		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionResendVerification, actor, actor)
 	})
 
 	if err != nil {
@@ -277,9 +288,9 @@ func (s *AuthService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta
 		if err := s.tokenRepo.WithTx(tx).Create(ctx, resetToken); err != nil {
 			return err
 		}
-
+		actor := domain.MapUserToAuditUser(user)
 		return s.auditLogger.WithTx(tx).
-			Log(ctx, meta, enum.ActionForgotPassword, user, user)
+			Log(ctx, meta, enum.ActionForgotPassword, actor, actor)
 	})
 
 	if err != nil {
@@ -391,7 +402,8 @@ func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.Aud
 			action = enum.ActionSetPassword
 		}
 
-		return s.auditLogger.WithTx(tx).Log(ctx, meta, action, user, user)
+		actor := domain.MapUserToAuditUser(user)
+		return s.auditLogger.WithTx(tx).Log(ctx, meta, action, actor, actor)
 	})
 	if err != nil {
 		if errors.Is(err, ErrPasswordAlreadySet) || errors.Is(err, ErrInvalidInput) {
