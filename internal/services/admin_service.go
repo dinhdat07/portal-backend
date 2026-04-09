@@ -32,6 +32,7 @@ func NewAdminService(
 	db *gorm.DB,
 	repo *repositories.UserRepository,
 	tokenRepo *repositories.UserTokenRepository,
+	roleRepo *repositories.RoleRepository,
 	logger *AuditLogService,
 	emailSvc *email.SMTPEmailService,
 	frontendURL string,
@@ -40,6 +41,7 @@ func NewAdminService(
 		db:          db,
 		userRepo:    repo,
 		tokenRepo:   tokenRepo,
+		roleRepo:    roleRepo,
 		auditLogger: logger,
 		emailSvc:    emailSvc,
 		frontendURL: frontendURL,
@@ -102,7 +104,7 @@ func (svc *AdminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, 
 }
 
 func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.CreateUserInput) (*models.User, error) {
-	if in.RoleCode != "" && !in.RoleCode.IsValid() {
+	if in.RoleCode == "" {
 		return nil, ErrInvalidInput
 	}
 
@@ -190,6 +192,15 @@ func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta,
 		return nil, err
 	}
 
+	roleAdmin, err := svc.roleRepo.FindByCode(ctx, constants.RoleCodeAdmin)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	if actor.ID != user.ID && user.RoleID == roleAdmin.ID {
+		return nil, ErrForbidden
+	}
+
 	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := svc.userRepo.WithTx(tx).Delete(ctx, userID, actor.ID); err != nil {
 			return ErrInternalServer
@@ -252,7 +263,7 @@ func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta
 }
 
 func (svc *AdminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, roleCode constants.RoleCode) (*models.User, error) {
-	if !roleCode.IsValid() {
+	if roleCode == "" {
 		return nil, ErrInvalidInput
 	}
 

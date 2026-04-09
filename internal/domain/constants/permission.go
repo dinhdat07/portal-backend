@@ -20,3 +20,16 @@ const (
 	PermUserRestore    PermissionCode = "users:restore"
 	PermUserRoleUpdate PermissionCode = "users:update_role"
 )
+
+var AllPermissions = []PermissionCode{
+	PermUserList,
+	PermUserReadDetail,
+	PermUserCreate,
+	PermUserUpdate,
+	PermUserDelete,
+	PermUserRestore,
+	PermUserRoleUpdate,
+	PermProfileReadSelf,
+	PermProfileUpdateSelf,
+	PermProfileChangePassword,
+}

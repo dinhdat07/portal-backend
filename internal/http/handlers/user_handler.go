@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type UserHandler struct {
@@ -65,25 +64,17 @@ func (h *UserHandler) ChangeMyPassword(c *gin.Context) {
 		return
 	}
 
-	userIDValue, exists := c.Get("user_id")
-	if !exists {
+	actor, err := reqctx.GetActorFromGin(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
 		})
 		return
 	}
 
-	userID, ok := userIDValue.(uuid.UUID)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid user id in token",
-		})
-		return
-	}
-
 	meta := reqctx.GetAuditMetaFromGin(c)
 
-	if err := h.userService.ChangePassword(c.Request.Context(), meta, userID, req.CurrentPassword, req.NewPassword, req.ConfirmPassword); err != nil {
+	if err := h.userService.ChangePassword(c.Request.Context(), meta, actor, req.CurrentPassword, req.NewPassword, req.ConfirmPassword); err != nil {
 		switch {
 		case errors.Is(err, services.ErrUnauthorized):
 			c.JSON(http.StatusUnauthorized, gin.H{

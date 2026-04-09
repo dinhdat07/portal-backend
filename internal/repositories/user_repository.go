@@ -150,7 +150,7 @@ func (r *UserRepository) ListUsers(ctx context.Context, filter domain.UsersFilte
 	offset := (filter.Page - 1) * filter.PageSize
 	var users []models.User
 
-	if err := db.Offset(offset).Limit(filter.PageSize).Find(&users).Error; err != nil {
+	if err := db.Preload("Role").Offset(offset).Limit(filter.PageSize).Find(&users).Error; err != nil {
 		return nil, 0, err
 	}
 

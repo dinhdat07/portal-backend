@@ -33,8 +33,8 @@ type AuthService struct {
 	frontendBaseURL string
 }
 
-func NewAuthService(db *gorm.DB, userRepo *repositories.UserRepository, tokenRepo *repositories.UserTokenRepository, manager *token.Manager, logger *AuditLogService, emailService *email.SMTPEmailService, frontendUrl string) *AuthService {
-	return &AuthService{db: db, userRepo: userRepo, tokenRepo: tokenRepo, tokenManager: manager, auditLogger: logger, emailService: emailService, frontendBaseURL: frontendUrl}
+func NewAuthService(db *gorm.DB, userRepo *repositories.UserRepository, tokenRepo *repositories.UserTokenRepository, roleRepo *repositories.RoleRepository, manager *token.Manager, logger *AuditLogService, emailService *email.SMTPEmailService, frontendUrl string) *AuthService {
+	return &AuthService{db: db, userRepo: userRepo, tokenRepo: tokenRepo, roleRepo: roleRepo, tokenManager: manager, auditLogger: logger, emailService: emailService, frontendBaseURL: frontendUrl}
 }
 
 func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, email, username, password, firstName, lastName string, dob time.Time) error {
@@ -78,6 +78,7 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 	// transaction, critical
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.userRepo.WithTx(tx).Create(ctx, user); err != nil {
+			print("check: ", err.Error())
 			return err
 		}
 

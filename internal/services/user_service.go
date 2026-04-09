@@ -22,8 +22,8 @@ type UserService struct {
 	userRepo    *repositories.UserRepository
 }
 
-func NewUserService(db *gorm.DB, repo *repositories.UserRepository, logger *AuditLogService) *UserService {
-	return &UserService{db: db, userRepo: repo, auditLogger: logger}
+func NewUserService(db *gorm.DB, repo *repositories.UserRepository, roleRepo *repositories.RoleRepository, logger *AuditLogService) *UserService {
+	return &UserService{db: db, userRepo: repo, roleRepo: roleRepo, auditLogger: logger}
 }
 
 func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID) (*models.User, error) {
@@ -43,8 +43,8 @@ func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, 
 	return user, nil
 }
 
-func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMeta, id uuid.UUID, current, newPassword, confirm string) error {
-	user, err := svc.userRepo.FindByID(ctx, id)
+func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, current, newPassword, confirm string) error {
+	user, err := svc.userRepo.FindByID(ctx, actor.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrUnauthorized
@@ -80,11 +80,10 @@ func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMe
 	}
 
 	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := svc.userRepo.WithTx(tx).UpdatePassword(ctx, id, string(hashed)); err != nil {
+		if err := svc.userRepo.WithTx(tx).UpdatePassword(ctx, actor.ID, string(hashed)); err != nil {
 			return ErrInternalServer
 		}
 
-		actor := domain.MapUserToAuditUser(user)
 		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionChangePassword, actor, actor); err != nil {
 			return ErrAuditLogger
 		}

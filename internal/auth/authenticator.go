@@ -11,8 +11,8 @@ type Authenticator struct {
 	roleRepo *repositories.RoleRepository
 }
 
-func NewAuthenticator(manager *token.Manager) *Authenticator {
-	return &Authenticator{manager: manager}
+func NewAuthenticator(manager *token.Manager, roleRepo *repositories.RoleRepository) *Authenticator {
+	return &Authenticator{manager: manager, roleRepo: roleRepo}
 }
 
 func (a *Authenticator) Authenticate(ctx context.Context, tokenString string) (*Principal, error) {
@@ -37,6 +37,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, tokenString string) (*
 		Username:    claims.Username,
 		Email:       claims.Email,
 		RoleID:      claims.RoleID,
+		RoleCode:    role.Code,
 		Permissions: perms,
 	}
 

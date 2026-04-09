@@ -4,19 +4,14 @@ import (
 	"fmt"
 	"portal-system/internal/auth"
 	"portal-system/internal/config"
-	"portal-system/internal/domain/constants"
-	"portal-system/internal/domain/enum"
 	"portal-system/internal/http/handlers"
 	"portal-system/internal/models"
 	"portal-system/internal/platform/email"
 	"portal-system/internal/platform/token"
 	"portal-system/internal/repositories"
 	"portal-system/internal/services"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -51,18 +46,19 @@ func New() (*App, error) {
 	emailService := email.NewSMTPEmailService(*smtpCfg)
 
 	// init
-	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
-	authenticator := auth.NewAuthenticator(tokenManager)
-	authorizer := auth.NewAuthorizer()
-
 	userRepo := repositories.NewUserRepository(db)
 	auditLogRepo := repositories.NewAuditLogRepository(db)
 	tokenRepo := repositories.NewUserTokenRepository(db)
+	roleRepo := repositories.NewRoleRepository(db)
+
+	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
+	authenticator := auth.NewAuthenticator(tokenManager, roleRepo)
+	authorizer := auth.NewAuthorizer()
 
 	auditLogService := services.NewAuditLogService(auditLogRepo)
-	authService := services.NewAuthService(db, userRepo, tokenRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl)
-	userService := services.NewUserService(db, userRepo, auditLogService)
-	adminService := services.NewAdminService(db, userRepo, tokenRepo, auditLogService, emailService, cfg.FrontEndUrl)
+	authService := services.NewAuthService(db, userRepo, tokenRepo, roleRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl)
+	userService := services.NewUserService(db, userRepo, roleRepo, auditLogService)
+	adminService := services.NewAdminService(db, userRepo, tokenRepo, roleRepo, auditLogService, emailService, cfg.FrontEndUrl)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
@@ -70,7 +66,13 @@ func New() (*App, error) {
 	router := setupRouter(authHandler, userHandler, adminHandler, authenticator, authorizer)
 
 	if cfg.Env == "development" {
+		if err := seedPermissions(db); err != nil {
+			return nil, err
+		}
 		if err := seedRoles(db); err != nil {
+			return nil, err
+		}
+		if err := seedRolePermissions(db); err != nil {
 			return nil, err
 		}
 		if err := seedAdmin(db, cfg); err != nil {
@@ -84,68 +86,6 @@ func New() (*App, error) {
 		Router: router,
 	}, nil
 
-}
-
-func seedAdmin(db *gorm.DB, cfg *config.Config) error {
-	var existing models.User
-	err := db.Where("email = ?", cfg.AdminEmail).First(&existing).Error
-	if err == nil {
-		return nil
-	} else if err != gorm.ErrRecordNotFound {
-		return err
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(cfg.AdminPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	hashStr := string(hash)
-	now := time.Now()
-
-	var role models.Role
-	if err := db.Where("code = ?", constants.RoleCodeAdmin).First(&role).Error; err != nil {
-		return err
-	}
-
-	admin := &models.User{
-		Email:           cfg.AdminEmail,
-		Username:        "admin",
-		FirstName:       "System",
-		LastName:        "Admin",
-		PasswordHash:    &hashStr,
-		RoleID:          role.ID,
-		Status:          enum.StatusActive,
-		EmailVerifiedAt: &now,
-	}
-
-	return db.Create(admin).Error
-}
-
-func seedRoles(db *gorm.DB) error {
-	roles := []models.Role{
-		{
-			ID:   uuid.New(),
-			Code: constants.RoleCodeAdmin,
-			Name: "Admin",
-		},
-		{
-			ID:   uuid.New(),
-			Code: constants.RoleCodeUser,
-			Name: "User",
-		},
-	}
-
-	for _, r := range roles {
-		err := db.
-			Where("code = ?", r.Code).
-			FirstOrCreate(&r).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (a *App) Run() error {

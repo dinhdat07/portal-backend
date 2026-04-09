@@ -3,7 +3,6 @@ package reqctx
 import (
 	"errors"
 	"portal-system/internal/domain"
-	"portal-system/internal/domain/constants"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,15 +23,10 @@ func GetActorFromGin(c *gin.Context) (*domain.AuditUser, error) {
 		return nil, errors.New("missing principal in context")
 	}
 
-	role := constants.RoleCode(principal.RoleCode)
-	if !role.IsValid() {
-		return nil, errors.New("invalid role in principal")
-	}
-
 	return &domain.AuditUser{
 		ID:       principal.UserID,
 		Username: principal.Username,
 		Email:    principal.Email,
-		RoleCode: role,
+		RoleCode: principal.RoleCode,
 	}, nil
 }
