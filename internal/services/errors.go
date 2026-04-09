@@ -41,6 +41,11 @@ var (
 		Code:    "user_inactive",
 		Message: "Your account is inactive",
 	}
+
+	ErrInvalidRefreshToken = &AppError{
+		Code:    "invalid_refresh_token",
+		Message: "Your session is expired",
+	}
 )
 
 var (

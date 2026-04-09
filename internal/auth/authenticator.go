@@ -38,6 +38,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, tokenString string) (*
 		Email:       claims.Email,
 		RoleID:      claims.RoleID,
 		RoleCode:    role.Code,
+		SessionID:   claims.SessionID,
 		Permissions: perms,
 	}
 

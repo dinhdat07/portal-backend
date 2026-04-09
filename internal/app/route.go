@@ -30,6 +30,8 @@ func setupRouter(
 		authRoutes.POST("/set-password", authHandler.SetPassword)
 		authRoutes.POST("/reset-password", authHandler.ResetPassword)
 		authRoutes.POST("/forgot-password", authHandler.ForgotPassword)
+
+		authRoutes.POST("/refresh", authHandler.Refresh)
 	}
 
 	protected := api.Group("/")
@@ -37,6 +39,10 @@ func setupRouter(
 	// authentication phase
 	protected.Use(authn)
 	{
+		// protected auth routes
+		protected.POST("/auth/logout", authHandler.Logout)
+		protected.POST("/auth/logout-all", authHandler.LogoutAll)
+
 		users := protected.Group("/users")
 		{
 			me := users.Group("/me")

@@ -12,6 +12,7 @@ type Config struct {
 	DBUrl         string
 	JWTSecret     string
 	JWTAccessTTL  int
+	RefreshTTL    int
 	Port          string
 	Env           string
 	AdminEmail    string
@@ -26,13 +27,14 @@ func Load() (*Config, error) {
 		return nil, errors.New("errors: cannot load env variables")
 	}
 
-	ttlStr := os.Getenv("JWT_ACCESS_TTL")
-	ttl, _ := strconv.Atoi(ttlStr)
+	accessTTL, _ := strconv.Atoi(os.Getenv("JWT_ACCESS_TTL"))
+	refreshTTL, _ := strconv.Atoi(os.Getenv("JWT_REFRESH_TTL"))
 
 	return &Config{
 		DBUrl:         os.Getenv("DB_URL"),
 		JWTSecret:     os.Getenv("JWT_SECRET"),
-		JWTAccessTTL:  ttl,
+		JWTAccessTTL:  accessTTL,
+		RefreshTTL:    refreshTTL,
 		Port:          os.Getenv("PORT"),
 		Env:           os.Getenv("ENV"),
 		AdminEmail:    os.Getenv("ADMIN_EMAIL"),

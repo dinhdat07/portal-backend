@@ -5,6 +5,7 @@ import (
 	"portal-system/internal/domain"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func GetAuditMetaFromGin(c *gin.Context) *domain.AuditMeta {
@@ -29,4 +30,13 @@ func GetActorFromGin(c *gin.Context) (*domain.AuditUser, error) {
 		Email:    principal.Email,
 		RoleCode: principal.RoleCode,
 	}, nil
+}
+
+func GetSessionIDFromGin(c *gin.Context) (uuid.UUID, error) {
+	principal, exists := GetPrincipal(c)
+	if principal == nil || !exists {
+		return uuid.Nil, errors.New("missing principal in context")
+	}
+
+	return principal.SessionID, nil
 }

@@ -50,13 +50,14 @@ func New() (*App, error) {
 	auditLogRepo := repositories.NewAuditLogRepository(db)
 	tokenRepo := repositories.NewUserTokenRepository(db)
 	roleRepo := repositories.NewRoleRepository(db)
+	sessionRepo := repositories.NewAuthSessionRepository(db)
 
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
 	authenticator := auth.NewAuthenticator(tokenManager, roleRepo)
 	authorizer := auth.NewAuthorizer()
 
 	auditLogService := services.NewAuditLogService(auditLogRepo)
-	authService := services.NewAuthService(db, userRepo, tokenRepo, roleRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl)
+	authService := services.NewAuthService(db, userRepo, tokenRepo, roleRepo, sessionRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl, cfg.RefreshTTL)
 	userService := services.NewUserService(db, userRepo, roleRepo, auditLogService)
 	adminService := services.NewAdminService(db, userRepo, tokenRepo, roleRepo, auditLogService, emailService, cfg.FrontEndUrl)
 
@@ -94,6 +95,6 @@ func (a *App) Run() error {
 
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
-		&models.User{}, &models.AuditLog{}, &models.UserToken{}, &models.Role{}, &models.Permission{},
+		&models.User{}, &models.AuditLog{}, &models.UserToken{}, &models.Role{}, &models.Permission{}, &models.AuthSession{},
 	)
 }

@@ -9,11 +9,12 @@ import (
 )
 
 type Claims struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Username string    `json:"username"`
-	Email    string    `json:"email"`
-	RoleID   uuid.UUID `json:"role_id"`
-	RoleCode string    `json:"role_code"`
+	UserID    uuid.UUID `json:"user_id"`
+	SessionID uuid.UUID `json:"session_id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	RoleID    uuid.UUID `json:"role_id"`
+	RoleCode  string    `json:"role_code"`
 	jwt.RegisteredClaims
 }
 
@@ -27,13 +28,14 @@ func New(secret string, ttlSec int) *Manager {
 	return &Manager{[]byte(secret), tokenTTL}
 }
 
-func (m *Manager) Generate(userID uuid.UUID, roleId uuid.UUID, roleCode string, email string, username string) (string, error) {
+func (m *Manager) GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID, roleId uuid.UUID, roleCode string, email string, username string) (string, error) {
 	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		RoleID:   roleId,
-		RoleCode: roleCode,
-		Email:    email,
+		UserID:    userID,
+		SessionID: sessionID,
+		Username:  username,
+		RoleID:    roleId,
+		RoleCode:  roleCode,
+		Email:     email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -43,6 +45,10 @@ func (m *Manager) Generate(userID uuid.UUID, roleId uuid.UUID, roleCode string, 
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(m.secret)
+}
+
+func (m *Manager) GenerateRefreshToken() (string, error) {
+	return GenerateSecureToken(32)
 }
 
 func (m *Manager) Parse(tokenString string) (*Claims, error) {

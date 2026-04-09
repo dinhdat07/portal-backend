@@ -28,13 +28,38 @@ type AuthService struct {
 	userRepo        *repositories.UserRepository
 	tokenRepo       *repositories.UserTokenRepository
 	roleRepo        *repositories.RoleRepository
+	sessionRepo     *repositories.AuthSessionRepository
 	tokenManager    *token.Manager
 	emailService    *email.SMTPEmailService
 	frontendBaseURL string
+	refreshTTL      time.Duration
 }
 
-func NewAuthService(db *gorm.DB, userRepo *repositories.UserRepository, tokenRepo *repositories.UserTokenRepository, roleRepo *repositories.RoleRepository, manager *token.Manager, logger *AuditLogService, emailService *email.SMTPEmailService, frontendUrl string) *AuthService {
-	return &AuthService{db: db, userRepo: userRepo, tokenRepo: tokenRepo, roleRepo: roleRepo, tokenManager: manager, auditLogger: logger, emailService: emailService, frontendBaseURL: frontendUrl}
+func NewAuthService(db *gorm.DB,
+	userRepo *repositories.UserRepository,
+	tokenRepo *repositories.UserTokenRepository,
+	roleRepo *repositories.RoleRepository,
+	sessionRepo *repositories.AuthSessionRepository,
+	manager *token.Manager,
+	logger *AuditLogService,
+	emailService *email.SMTPEmailService,
+	frontendUrl string,
+	refreshSec int) *AuthService {
+
+	refreshTTL := time.Duration(refreshSec) * time.Second
+
+	return &AuthService{
+		db:              db,
+		userRepo:        userRepo,
+		tokenRepo:       tokenRepo,
+		roleRepo:        roleRepo,
+		sessionRepo:     sessionRepo,
+		tokenManager:    manager,
+		auditLogger:     logger,
+		emailService:    emailService,
+		frontendBaseURL: frontendUrl,
+		refreshTTL:      refreshTTL,
+	}
 }
 
 func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, email, username, password, firstName, lastName string, dob time.Time) error {
@@ -78,7 +103,6 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 	// transaction, critical
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.userRepo.WithTx(tx).Create(ctx, user); err != nil {
-			print("check: ", err.Error())
 			return err
 		}
 
@@ -146,7 +170,31 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 		return nil, ErrAccountDeleted
 	}
 
-	token, err := s.tokenManager.Generate(user.ID, user.Role.ID, string(user.Role.Code), user.Email, user.Username)
+	refreshToken, err := s.tokenManager.GenerateRefreshToken()
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	now := time.Now()
+	refreshTokenHash := token.HashToken(refreshToken)
+	refreshExpiresAt := now.Add(s.refreshTTL)
+	session := &models.AuthSession{
+		UserID:           user.ID,
+		RefreshTokenHash: refreshTokenHash,
+		ExpiresAt:        refreshExpiresAt,
+		LastUsedAt:       &now,
+	}
+
+	if meta != nil {
+		session.UserAgent = meta.UserAgent
+		session.IPAddress = meta.IPAddress
+	}
+
+	if err := s.sessionRepo.Create(ctx, session); err != nil {
+		return nil, ErrInternalServer
+	}
+
+	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, session.ID, user.Role.ID, string(user.Role.Code), user.Email, user.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +204,10 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 	s.auditLogger.Log(ctx, meta, enum.ActionLogin, actor, nil)
 
 	return &domain.LoginResult{
-		AccessToken: token,
-		ExpiresIn:   s.tokenManager.ExpiresInSeconds(),
-		User:        user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    s.tokenManager.ExpiresInSeconds(),
+		User:         user,
 	}, nil
 }
 
@@ -309,20 +358,6 @@ func (s *AuthService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta
 	return nil
 }
 
-func isEmail(s string) bool {
-	_, err := mail.ParseAddress(s)
-	return err == nil
-}
-
-func generateHashToken() (string, string, error) {
-	rawToken, err := token.GenerateSecureToken(32)
-	if err != nil {
-		return "", "", ErrInternalServer
-	}
-	tokenHash := token.HashToken(rawToken)
-	return tokenHash, rawToken, nil
-}
-
 func (s *AuthService) SetPassword(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error {
 	return s.applyPasswordByToken(ctx, meta, in, tokenType)
 }
@@ -414,4 +449,112 @@ func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.Aud
 	}
 
 	return nil
+}
+
+func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refreshToken string) (*domain.RefreshResult, error) {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, ErrInvalidInput
+	}
+	refreshTokenHash := token.HashToken(refreshToken)
+	session, err := s.sessionRepo.FindActiveByRefreshTokenHash(ctx, refreshTokenHash)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	user, err := s.userRepo.FindByID(ctx, session.UserID)
+	if err != nil || user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	if user.DeletedAt.Valid {
+		return nil, ErrAccountDeleted
+	}
+
+	if user.EmailVerifiedAt == nil {
+		return nil, ErrAccountNotVerified
+	}
+
+	now := time.Now()
+
+	newRefreshTokenHash, newRefreshToken, err := generateHashToken()
+	if err != nil {
+		return nil, err
+	}
+	newRefreshExpiresAt := now.Add(s.refreshTTL)
+
+	err = s.sessionRepo.RotateRefreshToken(ctx, domain.RefreshInput{
+		SessionID:    session.ID,
+		NewTokenHash: newRefreshTokenHash,
+		NewExpiresAt: newRefreshExpiresAt,
+		RotatedAt:    now,
+	})
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	accessToken, err := s.tokenManager.GenerateAccessToken(
+		user.ID,
+		session.ID,
+		user.Role.ID,
+		string(user.Role.Code),
+		user.Email,
+		user.Username,
+	)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	return &domain.RefreshResult{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		ExpiresIn:    s.tokenManager.ExpiresInSeconds(),
+	}, nil
+
+}
+
+func (s *AuthService) Logout(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, sessionID uuid.UUID) error {
+	if actor == nil {
+		return ErrUnauthorized
+	}
+
+	if sessionID == uuid.Nil {
+		return ErrInvalidInput
+	}
+
+	if err := s.sessionRepo.RevokeByID(ctx, sessionID); err != nil {
+		return ErrInternalServer
+	}
+
+	return nil
+}
+
+func (s *AuthService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser) error {
+	if actor == nil {
+		return ErrUnauthorized
+	}
+
+	if actor.ID == uuid.Nil {
+		return ErrInvalidInput
+	}
+
+	if err := s.sessionRepo.RevokeAllByUserID(ctx, actor.ID); err != nil {
+		return ErrInternalServer
+	}
+
+	return nil
+}
+
+func isEmail(s string) bool {
+	_, err := mail.ParseAddress(s)
+	return err == nil
+}
+
+func generateHashToken() (string, string, error) {
+	rawToken, err := token.GenerateSecureToken(32)
+	if err != nil {
+		return "", "", ErrInternalServer
+	}
+	tokenHash := token.HashToken(rawToken)
+	return tokenHash, rawToken, nil
 }

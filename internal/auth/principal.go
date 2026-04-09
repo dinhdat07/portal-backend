@@ -12,5 +12,6 @@ type Principal struct {
 	Email       string    `json:"email"`
 	RoleID      uuid.UUID `json:"role_id"`
 	RoleCode    constants.RoleCode
+	SessionID   uuid.UUID
 	Permissions []string
 }
