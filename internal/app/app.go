@@ -7,8 +7,8 @@ import (
 	"portal-system/internal/http/handlers"
 	"portal-system/internal/models"
 	"portal-system/internal/platform/email"
+	"portal-system/internal/platform/storage"
 	"portal-system/internal/platform/token"
-	"portal-system/internal/repositories"
 	"portal-system/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -46,20 +46,21 @@ func New() (*App, error) {
 	emailService := email.NewSMTPEmailService(*smtpCfg)
 
 	// init
-	userRepo := repositories.NewUserRepository(db)
-	auditLogRepo := repositories.NewAuditLogRepository(db)
-	tokenRepo := repositories.NewUserTokenRepository(db)
-	roleRepo := repositories.NewRoleRepository(db)
-	sessionRepo := repositories.NewAuthSessionRepository(db)
+	userRepo := storage.NewGormUserRepository(db)
+	auditLogRepo := storage.NewGormAuditLogRepository(db)
+	tokenRepo := storage.NewGormUserTokenRepository(db)
+	roleRepo := storage.NewGormRoleRepository(db)
+	sessionRepo := storage.NewGormAuthSessionRepository(db)
+	txManager := storage.NewGormTxManager(db)
 
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
 	authenticator := auth.NewAuthenticator(tokenManager, roleRepo)
 	authorizer := auth.NewAuthorizer()
 
 	auditLogService := services.NewAuditLogService(auditLogRepo)
-	authService := services.NewAuthService(db, userRepo, tokenRepo, roleRepo, sessionRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl, cfg.RefreshTTL)
-	userService := services.NewUserService(db, userRepo, roleRepo, auditLogService)
-	adminService := services.NewAdminService(db, userRepo, tokenRepo, roleRepo, auditLogService, emailService, cfg.FrontEndUrl)
+	authService := services.NewAuthService(txManager, userRepo, tokenRepo, roleRepo, sessionRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl, cfg.RefreshTTL)
+	userService := services.NewUserService(txManager, userRepo, roleRepo, auditLogService)
+	adminService := services.NewAdminService(txManager, userRepo, tokenRepo, roleRepo, auditLogService, emailService, cfg.FrontEndUrl)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)

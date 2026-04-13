@@ -8,10 +8,10 @@ import (
 
 type Authenticator struct {
 	manager  *token.Manager
-	roleRepo *repositories.RoleRepository
+	roleRepo repositories.RoleRepository
 }
 
-func NewAuthenticator(manager *token.Manager, roleRepo *repositories.RoleRepository) *Authenticator {
+func NewAuthenticator(manager *token.Manager, roleRepo repositories.RoleRepository) *Authenticator {
 	return &Authenticator{manager: manager, roleRepo: roleRepo}
 }
 

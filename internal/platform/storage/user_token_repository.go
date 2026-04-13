@@ -1,4 +1,4 @@
-package repositories
+package storage
 
 import (
 	"context"
@@ -11,30 +11,30 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserTokenRepository struct {
+type GormUserTokenRepository struct {
 	db *gorm.DB
 }
 
-func NewUserTokenRepository(db *gorm.DB) *UserTokenRepository {
-	return &UserTokenRepository{db: db}
+func NewGormUserTokenRepository(db *gorm.DB) *GormUserTokenRepository {
+	return &GormUserTokenRepository{db: db}
 }
 
-func (r *UserTokenRepository) WithTx(tx any) *UserTokenRepository {
+func (r *GormUserTokenRepository) WithTx(tx any) *GormUserTokenRepository {
 	gormTx, ok := tx.(*gorm.DB)
 	if !ok {
 		return r
 	}
-	return &UserTokenRepository{db: gormTx}
+	return &GormUserTokenRepository{db: gormTx}
 }
 
-func (r *UserTokenRepository) Create(ctx context.Context, token *models.UserToken) error {
-	return r.db.WithContext(ctx).Create(token).Error
+func (r *GormUserTokenRepository) Create(ctx context.Context, token *models.UserToken) error {
+	return r.getDB(ctx).Create(token).Error
 }
 
-func (r *UserTokenRepository) FindValidToken(ctx context.Context, tokenHash string, tokenType enum.TokenType) (*models.UserToken, error) {
+func (r *GormUserTokenRepository) FindValidToken(ctx context.Context, tokenHash string, tokenType enum.TokenType) (*models.UserToken, error) {
 	var token models.UserToken
 
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).
 		Preload("User").
 		Where("token_hash = ?", tokenHash).
 		Where("token_type = ?", tokenType).
@@ -49,10 +49,10 @@ func (r *UserTokenRepository) FindValidToken(ctx context.Context, tokenHash stri
 	return &token, nil
 }
 
-func (r *UserTokenRepository) MarkUsed(ctx context.Context, id uuid.UUID) error {
+func (r *GormUserTokenRepository) MarkUsed(ctx context.Context, id uuid.UUID) error {
 	now := time.Now().UTC()
 
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).
 		Model(&models.UserToken{}).
 		Where("id = ?", id).
 		Where("used_at IS NULL").
@@ -69,10 +69,10 @@ func (r *UserTokenRepository) MarkUsed(ctx context.Context, id uuid.UUID) error 
 	return nil
 }
 
-func (r *UserTokenRepository) Revoke(ctx context.Context, id uuid.UUID) error {
+func (r *GormUserTokenRepository) Revoke(ctx context.Context, id uuid.UUID) error {
 	now := time.Now().UTC()
 
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).
 		Model(&models.UserToken{}).
 		Where("id = ?", id).
 		Where("revoked_at IS NULL").
@@ -89,10 +89,10 @@ func (r *UserTokenRepository) Revoke(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *UserTokenRepository) RevokeByUserAndType(ctx context.Context, userID uuid.UUID, tokenType enum.TokenType) error {
+func (r *GormUserTokenRepository) RevokeByUserAndType(ctx context.Context, userID uuid.UUID, tokenType enum.TokenType) error {
 	now := time.Now().UTC()
 
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).
 		Model(&models.UserToken{}).
 		Where("user_id = ?", userID).
 		Where("token_type = ?", tokenType).
@@ -100,4 +100,11 @@ func (r *UserTokenRepository) RevokeByUserAndType(ctx context.Context, userID uu
 		Where("revoked_at IS NULL").
 		Where("expires_at > ?", now).
 		Update("revoked_at", &now).Error
+}
+
+func (r *GormUserTokenRepository) getDB(ctx context.Context) *gorm.DB {
+	if tx, ok := ctx.Value(txKey{}).(*gorm.DB); ok {
+		return tx.WithContext(ctx)
+	}
+	return r.db.WithContext(ctx)
 }

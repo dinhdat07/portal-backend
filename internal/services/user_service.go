@@ -16,14 +16,14 @@ import (
 )
 
 type UserService struct {
-	db          *gorm.DB
+	txManager   repositories.TxManager
 	auditLogger *AuditLogService
-	roleRepo    *repositories.RoleRepository
-	userRepo    *repositories.UserRepository
+	roleRepo    repositories.RoleRepository
+	userRepo    repositories.UserRepository
 }
 
-func NewUserService(db *gorm.DB, repo *repositories.UserRepository, roleRepo *repositories.RoleRepository, logger *AuditLogService) *UserService {
-	return &UserService{db: db, userRepo: repo, roleRepo: roleRepo, auditLogger: logger}
+func NewUserService(txManager repositories.TxManager, repo repositories.UserRepository, roleRepo repositories.RoleRepository, logger *AuditLogService) *UserService {
+	return &UserService{txManager: txManager, userRepo: repo, roleRepo: roleRepo, auditLogger: logger}
 }
 
 func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID) (*models.User, error) {
@@ -79,12 +79,12 @@ func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMe
 		return err
 	}
 
-	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := svc.userRepo.WithTx(tx).UpdatePassword(ctx, actor.ID, string(hashed)); err != nil {
+	err = svc.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := svc.userRepo.UpdatePassword(ctx, actor.ID, string(hashed)); err != nil {
 			return ErrInternalServer
 		}
 
-		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionChangePassword, actor, actor); err != nil {
+		if err := svc.auditLogger.Log(ctx, meta, enum.ActionChangePassword, actor, actor); err != nil {
 			return ErrAuditLogger
 		}
 		return nil
@@ -153,8 +153,8 @@ func (svc *UserService) UpdateProfile(ctx context.Context, meta *domain.AuditMet
 		user.Username = *input.Username
 	}
 
-	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := svc.userRepo.WithTx(tx).Update(ctx, user); err != nil {
+	err = svc.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := svc.userRepo.Update(ctx, user); err != nil {
 			return ErrInternalServer
 		}
 
@@ -164,7 +164,7 @@ func (svc *UserService) UpdateProfile(ctx context.Context, meta *domain.AuditMet
 		}
 
 		target := domain.MapUserToAuditUser(user)
-		err := svc.auditLogger.WithTx(tx).LogWithMetadata(ctx, meta, action, actor, target, map[string]any{
+		err := svc.auditLogger.LogWithMetadata(ctx, meta, action, actor, target, map[string]any{
 			"changes": changes,
 		})
 		if err != nil {
