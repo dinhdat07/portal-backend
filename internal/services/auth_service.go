@@ -35,30 +35,31 @@ type AuthService struct {
 	refreshTTL      time.Duration
 }
 
-func NewAuthService(txManager repositories.TxManager,
-	userRepo repositories.UserRepository,
-	tokenRepo repositories.UserTokenRepository,
-	roleRepo repositories.RoleRepository,
-	sessionRepo repositories.AuthSessionRepository,
-	manager *token.Manager,
-	logger *AuditLogService,
-	emailService *email.SMTPEmailService,
-	frontendUrl string,
-	refreshSec int) *AuthService {
+type AuthServiceDeps struct {
+	TxManager       repositories.TxManager
+	AuditLogger     *AuditLogService
+	UserRepo        repositories.UserRepository
+	TokenRepo       repositories.UserTokenRepository
+	RoleRepo        repositories.RoleRepository
+	SessionRepo     repositories.AuthSessionRepository
+	TokenManager    *token.Manager
+	EmailService    *email.SMTPEmailService
+	FrontendBaseURL string
+	RefreshTTL      time.Duration
+}
 
-	refreshTTL := time.Duration(refreshSec) * time.Second
-
+func NewAuthService(deps AuthServiceDeps) *AuthService {
 	return &AuthService{
-		txManager:       txManager,
-		userRepo:        userRepo,
-		tokenRepo:       tokenRepo,
-		roleRepo:        roleRepo,
-		sessionRepo:     sessionRepo,
-		tokenManager:    manager,
-		auditLogger:     logger,
-		emailService:    emailService,
-		frontendBaseURL: frontendUrl,
-		refreshTTL:      refreshTTL,
+		txManager:       deps.TxManager,
+		auditLogger:     deps.AuditLogger,
+		userRepo:        deps.UserRepo,
+		tokenRepo:       deps.TokenRepo,
+		roleRepo:        deps.RoleRepo,
+		sessionRepo:     deps.SessionRepo,
+		tokenManager:    deps.TokenManager,
+		emailService:    deps.EmailService,
+		frontendBaseURL: deps.FrontendBaseURL,
+		refreshTTL:      deps.RefreshTTL,
 	}
 }
 

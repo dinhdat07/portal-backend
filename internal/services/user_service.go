@@ -22,8 +22,20 @@ type UserService struct {
 	userRepo    repositories.UserRepository
 }
 
-func NewUserService(txManager repositories.TxManager, repo repositories.UserRepository, roleRepo repositories.RoleRepository, logger *AuditLogService) *UserService {
-	return &UserService{txManager: txManager, userRepo: repo, roleRepo: roleRepo, auditLogger: logger}
+type UserServiceDeps struct {
+	TxManager   repositories.TxManager
+	AuditLogger *AuditLogService
+	RoleRepo    repositories.RoleRepository
+	UserRepo    repositories.UserRepository
+}
+
+func NewUserService(deps UserServiceDeps) *UserService {
+	return &UserService{
+		txManager:   deps.TxManager,
+		userRepo:    deps.UserRepo,
+		roleRepo:    deps.RoleRepo,
+		auditLogger: deps.AuditLogger,
+	}
 }
 
 func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID) (*models.User, error) {

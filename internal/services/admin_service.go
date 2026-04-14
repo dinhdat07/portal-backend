@@ -28,23 +28,25 @@ type AdminService struct {
 	frontendURL string
 }
 
-func NewAdminService(
-	txManager repositories.TxManager,
-	repo repositories.UserRepository,
-	tokenRepo repositories.UserTokenRepository,
-	roleRepo repositories.RoleRepository,
-	logger *AuditLogService,
-	emailSvc *email.SMTPEmailService,
-	frontendURL string,
-) *AdminService {
+type AdminServiceDeps struct {
+	TxManager   repositories.TxManager
+	AuditLogger *AuditLogService
+	UserRepo    repositories.UserRepository
+	TokenRepo   repositories.UserTokenRepository
+	RoleRepo    repositories.RoleRepository
+	EmailSvc    *email.SMTPEmailService
+	FrontendURL string
+}
+
+func NewAdminService(deps AdminServiceDeps) *AdminService {
 	return &AdminService{
-		txManager:   txManager,
-		userRepo:    repo,
-		tokenRepo:   tokenRepo,
-		roleRepo:    roleRepo,
-		auditLogger: logger,
-		emailSvc:    emailSvc,
-		frontendURL: frontendURL,
+		txManager:   deps.TxManager,
+		userRepo:    deps.UserRepo,
+		tokenRepo:   deps.TokenRepo,
+		roleRepo:    deps.RoleRepo,
+		auditLogger: deps.AuditLogger,
+		emailSvc:    deps.EmailSvc,
+		frontendURL: deps.FrontendURL,
 	}
 }
 

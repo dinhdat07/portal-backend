@@ -10,6 +10,7 @@ import (
 	"portal-system/internal/platform/storage"
 	"portal-system/internal/platform/token"
 	"portal-system/internal/services"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
@@ -45,7 +46,7 @@ func New() (*App, error) {
 	}
 	emailService := email.NewSMTPEmailService(*smtpCfg)
 
-	// init
+	// init repo
 	userRepo := storage.NewGormUserRepository(db)
 	auditLogRepo := storage.NewGormAuditLogRepository(db)
 	tokenRepo := storage.NewGormUserTokenRepository(db)
@@ -53,19 +54,56 @@ func New() (*App, error) {
 	sessionRepo := storage.NewGormAuthSessionRepository(db)
 	txManager := storage.NewGormTxManager(db)
 
+	// auth
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
 	authenticator := auth.NewAuthenticator(tokenManager, roleRepo)
 	authorizer := auth.NewAuthorizer()
 
+	// service
 	auditLogService := services.NewAuditLogService(auditLogRepo)
-	authService := services.NewAuthService(txManager, userRepo, tokenRepo, roleRepo, sessionRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl, cfg.RefreshTTL)
-	userService := services.NewUserService(txManager, userRepo, roleRepo, auditLogService)
-	adminService := services.NewAdminService(txManager, userRepo, tokenRepo, roleRepo, auditLogService, emailService, cfg.FrontEndUrl)
 
+	authService := services.NewAuthService(services.AuthServiceDeps{
+		TxManager:       txManager,
+		AuditLogger:     auditLogService,
+		UserRepo:        userRepo,
+		TokenRepo:       tokenRepo,
+		RoleRepo:        roleRepo,
+		SessionRepo:     sessionRepo,
+		TokenManager:    tokenManager,
+		EmailService:    emailService,
+		FrontendBaseURL: cfg.FrontEndUrl,
+		RefreshTTL:      time.Duration(cfg.RefreshTTL) * time.Second,
+	})
+
+	userService := services.NewUserService(services.UserServiceDeps{
+		TxManager:   txManager,
+		AuditLogger: auditLogService,
+		UserRepo:    userRepo,
+		RoleRepo:    roleRepo,
+	})
+
+	adminService := services.NewAdminService(services.AdminServiceDeps{
+		TxManager:   txManager,
+		AuditLogger: auditLogService,
+		UserRepo:    userRepo,
+		TokenRepo:   tokenRepo,
+		RoleRepo:    roleRepo,
+		EmailSvc:    emailService,
+		FrontendURL: cfg.FrontEndUrl,
+	})
+
+	// handler
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
 	adminHandler := handlers.NewAdminHandler(adminService, userService)
-	router := setupRouter(authHandler, userHandler, adminHandler, authenticator, authorizer)
+
+	router := setupRouter(
+		authHandler,
+		userHandler,
+		adminHandler,
+		authenticator,
+		authorizer,
+	)
 
 	if cfg.Env == "development" {
 		if err := seedPermissions(db); err != nil {
