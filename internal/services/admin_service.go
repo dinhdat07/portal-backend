@@ -9,7 +9,6 @@ import (
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
-	"portal-system/internal/platform/email"
 	"portal-system/internal/repositories"
 
 	"time"
@@ -24,7 +23,7 @@ type AdminService struct {
 	userRepo    repositories.UserRepository
 	tokenRepo   repositories.UserTokenRepository
 	roleRepo    repositories.RoleRepository
-	emailSvc    *email.SMTPEmailService
+	emailSvc    emailSender
 	frontendURL string
 }
 
@@ -34,7 +33,7 @@ type AdminServiceDeps struct {
 	UserRepo    repositories.UserRepository
 	TokenRepo   repositories.UserTokenRepository
 	RoleRepo    repositories.RoleRepository
-	EmailSvc    *email.SMTPEmailService
+	EmailSvc    emailSender
 	FrontendURL string
 }
 

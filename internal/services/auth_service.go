@@ -13,7 +13,6 @@ import (
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
-	"portal-system/internal/platform/email"
 	"portal-system/internal/platform/token"
 	"portal-system/internal/repositories"
 
@@ -29,8 +28,8 @@ type AuthService struct {
 	tokenRepo       repositories.UserTokenRepository
 	roleRepo        repositories.RoleRepository
 	sessionRepo     repositories.AuthSessionRepository
-	tokenManager    *token.Manager
-	emailService    *email.SMTPEmailService
+	tokenManager    tokenIssuer
+	emailService    emailSender
 	frontendBaseURL string
 	refreshTTL      time.Duration
 }
@@ -42,8 +41,8 @@ type AuthServiceDeps struct {
 	TokenRepo       repositories.UserTokenRepository
 	RoleRepo        repositories.RoleRepository
 	SessionRepo     repositories.AuthSessionRepository
-	TokenManager    *token.Manager
-	EmailService    *email.SMTPEmailService
+	TokenManager    tokenIssuer
+	EmailService    emailSender
 	FrontendBaseURL string
 	RefreshTTL      time.Duration
 }
