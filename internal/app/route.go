@@ -17,6 +17,8 @@ func setupRouter(
 	authorizer *auth.Authorizer) *gin.Engine {
 
 	r := gin.Default()
+
+	r.Use(middleware.RecoveryMiddleware())
 	api := r.Group("/api/v1")
 
 	authn := middleware.AuthenticationMiddleware(authenticator)
