@@ -8,9 +8,6 @@ const (
 	PermProfileUpdateSelf     PermissionCode = "profile:update_self"
 	PermProfileChangePassword PermissionCode = "profile:change_password"
 
-	// auth
-	PermAuthLogout PermissionCode = "auth:logout"
-
 	// user management
 	PermUserList       PermissionCode = "users:list"
 	PermUserReadDetail PermissionCode = "users:read_detail"

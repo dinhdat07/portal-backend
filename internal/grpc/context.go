@@ -3,6 +3,7 @@ package portalgrpc
 import (
 	"context"
 	"net"
+	"portal-system/internal/auth"
 	"portal-system/internal/domain"
 
 	"github.com/google/uuid"
@@ -16,6 +17,7 @@ type contextKey string
 
 const AuditUserContextKey contextKey = "audit_user"
 const SessionIDContextKey contextKey = "session_id"
+const principalContextKey contextKey = "principal"
 
 func getAuditFromCtx(ctx context.Context) *domain.AuditMeta {
 	meta := &domain.AuditMeta{}
@@ -79,4 +81,18 @@ func getSessionIDFromCtx(ctx context.Context) (uuid.UUID, error) {
 	default:
 		return uuid.Nil, gstatus.Error(codes.Unauthenticated, "invalid session id")
 	}
+}
+
+func SetPrincipal(ctx context.Context, principal *auth.Principal) context.Context {
+	return context.WithValue(ctx, principalContextKey, principal)
+}
+
+func GetPrincipal(ctx context.Context) (*auth.Principal, bool) {
+	v := ctx.Value(principalContextKey)
+	if v == nil {
+		return nil, false
+	}
+
+	principal, ok := v.(*auth.Principal)
+	return principal, ok
 }
