@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
 	"time"
@@ -9,22 +10,22 @@ import (
 )
 
 type UserResponse struct {
-	ID              string          `json:"id"`
-	Email           string          `json:"email"`
-	Username        string          `json:"username"`
-	FirstName       string          `json:"first_name"`
-	LastName        string          `json:"last_name"`
-	DOB             *time.Time      `json:"dob,omitempty"`
-	RoleCode        string          `json:"role"`
-	Status          enum.UserStatus `json:"status"`
-	EmailVerifiedAt *time.Time      `json:"email_verified_at,omitempty"`
-	LastLoginAt     *time.Time      `json:"last_login_at,omitempty"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
-	DeletedAt       *time.Time      `json:"deleted_at,omitempty"`
-	DeletedBy       *string         `json:"deleted_by,omitempty"`
-	RestoredAt      *time.Time      `json:"restored_at,omitempty"`
-	RestoredBy      *uuid.UUID      `json:"restored_by,omitempty"`
+	ID              string             `json:"id"`
+	Email           string             `json:"email"`
+	Username        string             `json:"username"`
+	FirstName       string             `json:"first_name"`
+	LastName        string             `json:"last_name"`
+	DOB             *time.Time         `json:"dob,omitempty"`
+	RoleCode        constants.RoleCode `json:"role"`
+	Status          enum.UserStatus    `json:"status"`
+	EmailVerifiedAt *time.Time         `json:"email_verified_at,omitempty"`
+	LastLoginAt     *time.Time         `json:"last_login_at,omitempty"`
+	CreatedAt       time.Time          `json:"created_at"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+	DeletedAt       *time.Time         `json:"deleted_at,omitempty"`
+	DeletedBy       *string            `json:"deleted_by,omitempty"`
+	RestoredAt      *time.Time         `json:"restored_at,omitempty"`
+	RestoredBy      *uuid.UUID         `json:"restored_by,omitempty"`
 }
 
 type ChangePasswordRequest struct {
@@ -52,7 +53,7 @@ func ToUserResponse(user *models.User) UserResponse {
 		FirstName:       user.FirstName,
 		LastName:        user.LastName,
 		DOB:             user.DOB,
-		RoleCode:        string(user.Role.Code),
+		RoleCode:        user.Role.Code,
 		Status:          user.Status,
 		EmailVerifiedAt: user.EmailVerifiedAt,
 		LastLoginAt:     user.LastLoginAt,

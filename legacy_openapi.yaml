@@ -885,7 +885,7 @@ components:
           format: date
           nullable: true
         role:
-          type: string
+          $ref: '#/components/schemas/RoleCode'
         status:
           $ref: '#/components/schemas/UserStatus'
         email_verified_at:

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"portal-system/internal/domain"
-	"portal-system/internal/dto"
+	"portal-system/internal/http/dto"
 	"portal-system/internal/http/reqctx"
 	"portal-system/internal/services"
 	"time"
