@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package portal.common.v1;
 
-option go_package = "portal-system/gen/go/portal/common/v1;commonv1";
+option go_package = "portal-system/gen/go/common/v1;commonv1";
 
 import "google/protobuf/timestamp.proto";
 

@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package portal.user.v1;
 
-option go_package = "portal-system/gen/go/portal/user/v1;userv1";
+option go_package = "portal-system/gen/go/user/v1;userv1";
 
 import "google/api/annotations.proto";
-import "portal/common/v1/common.proto";
+import "common/v1/common.proto";
 
 service UserService {
   rpc GetMyProfile(GetMyProfileRequest) returns (portal.common.v1.User) {

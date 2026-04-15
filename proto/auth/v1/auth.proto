@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package portal.auth.v1;
 
-option go_package = "portal-system/gen/go/portal/auth/v1;authv1";
+option go_package = "portal-system/gen/go/auth/v1;authv1";
 
 import "google/api/annotations.proto";
-import "portal/common/v1/common.proto";
+import "common/v1/common.proto";
 
 service AuthService {
   rpc Register(RegisterRequest) returns (portal.common.v1.MessageResponse) {

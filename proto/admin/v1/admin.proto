@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package portal.admin.v1;
 
-option go_package = "portal-system/gen/go/portal/admin/v1;adminv1";
+option go_package = "portal-system/gen/go/admin/v1;adminv1";
 
 import "google/api/annotations.proto";
-import "portal/common/v1/common.proto";
+import "common/v1/common.proto";
 
 service AdminService {
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
