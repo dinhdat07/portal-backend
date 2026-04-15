@@ -9,7 +9,6 @@ import (
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
-	"portal-system/internal/platform/email"
 	"portal-system/internal/repositories"
 
 	"time"
@@ -19,32 +18,34 @@ import (
 )
 
 type AdminService struct {
-	db          *gorm.DB
+	txManager   repositories.TxManager
 	auditLogger *AuditLogService
-	userRepo    *repositories.UserRepository
-	tokenRepo   *repositories.UserTokenRepository
-	roleRepo    *repositories.RoleRepository
-	emailSvc    *email.SMTPEmailService
+	userRepo    repositories.UserRepository
+	tokenRepo   repositories.UserTokenRepository
+	roleRepo    repositories.RoleRepository
+	emailSvc    emailSender
 	frontendURL string
 }
 
-func NewAdminService(
-	db *gorm.DB,
-	repo *repositories.UserRepository,
-	tokenRepo *repositories.UserTokenRepository,
-	roleRepo *repositories.RoleRepository,
-	logger *AuditLogService,
-	emailSvc *email.SMTPEmailService,
-	frontendURL string,
-) *AdminService {
+type AdminServiceDeps struct {
+	TxManager   repositories.TxManager
+	AuditLogger *AuditLogService
+	UserRepo    repositories.UserRepository
+	TokenRepo   repositories.UserTokenRepository
+	RoleRepo    repositories.RoleRepository
+	EmailSvc    emailSender
+	FrontendURL string
+}
+
+func NewAdminService(deps AdminServiceDeps) *AdminService {
 	return &AdminService{
-		db:          db,
-		userRepo:    repo,
-		tokenRepo:   tokenRepo,
-		roleRepo:    roleRepo,
-		auditLogger: logger,
-		emailSvc:    emailSvc,
-		frontendURL: frontendURL,
+		txManager:   deps.TxManager,
+		userRepo:    deps.UserRepo,
+		tokenRepo:   deps.TokenRepo,
+		roleRepo:    deps.RoleRepo,
+		auditLogger: deps.AuditLogger,
+		emailSvc:    deps.EmailSvc,
+		frontendURL: deps.FrontendURL,
 	}
 }
 
@@ -108,7 +109,11 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 		return nil, ErrInvalidInput
 	}
 
-	existingByEmail, _ := svc.userRepo.FindByEmail(ctx, in.Email)
+	existingByEmail, err := svc.userRepo.FindByEmail(ctx, in.Email)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
 	if existingByEmail != nil && existingByEmail.ID != uuid.Nil {
 		return nil, ErrEmailExists
 	}
@@ -142,13 +147,13 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 		Status:    enum.StatusPending,
 	}
 
-	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := svc.userRepo.WithTx(tx).Create(ctx, user); err != nil {
+	err = svc.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := svc.userRepo.Create(txCtx, user); err != nil {
 			return ErrInternalServer
 		}
 
-		if err := svc.tokenRepo.WithTx(tx).
-			RevokeByUserAndType(ctx, user.ID, enum.TokenTypePasswordSet); err != nil {
+		if err := svc.tokenRepo.
+			RevokeByUserAndType(txCtx, user.ID, enum.TokenTypePasswordSet); err != nil {
 			return ErrInternalServer
 		}
 
@@ -159,7 +164,7 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 			ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
 		}
 
-		if err := svc.tokenRepo.WithTx(tx).Create(ctx, setPasswordToken); err != nil {
+		if err := svc.tokenRepo.Create(txCtx, setPasswordToken); err != nil {
 			return ErrInternalServer
 		}
 
@@ -170,7 +175,7 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 		}
 
 		target := domain.MapUserToAuditUser(user)
-		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminCreateUser, actor, target); err != nil {
+		if err := svc.auditLogger.Log(txCtx, meta, enum.ActionAdminCreateUser, actor, target); err != nil {
 			return ErrAuditLogger
 		}
 		return nil
@@ -201,8 +206,8 @@ func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta,
 		return nil, ErrForbidden
 	}
 
-	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := svc.userRepo.WithTx(tx).Delete(ctx, userID, actor.ID); err != nil {
+	err = svc.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := svc.userRepo.Delete(ctx, userID, actor.ID); err != nil {
 			return ErrInternalServer
 		}
 
@@ -212,7 +217,7 @@ func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta,
 		user.Status = enum.StatusDeleted
 
 		target := domain.MapUserToAuditUser(user)
-		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminDeleteUser, actor, target); err != nil {
+		if err := svc.auditLogger.Log(ctx, meta, enum.ActionAdminDeleteUser, actor, target); err != nil {
 			return ErrAuditLogger
 		}
 		return nil
@@ -238,8 +243,8 @@ func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta
 		return nil, ErrUserNotDeleted
 	}
 
-	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := svc.userRepo.WithTx(tx).Restore(ctx, userID); err != nil {
+	err = svc.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := svc.userRepo.Restore(ctx, userID); err != nil {
 			return ErrInternalServer
 		}
 
@@ -248,7 +253,7 @@ func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta
 		user.Status = enum.StatusActive
 
 		target := domain.MapUserToAuditUser(user)
-		if err := svc.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionAdminRestoreUser, actor, target); err != nil {
+		if err := svc.auditLogger.Log(ctx, meta, enum.ActionAdminRestoreUser, actor, target); err != nil {
 			return ErrAuditLogger
 		}
 
@@ -299,15 +304,15 @@ func (svc *AdminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta,
 		"new": role,
 	}
 
-	err = svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := svc.userRepo.WithTx(tx).UpdateRole(ctx, id, role.ID); err != nil {
+	err = svc.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := svc.userRepo.UpdateRole(ctx, id, role.ID); err != nil {
 			return ErrInternalServer
 		}
 		user.Role = *role
 
 		target := domain.MapUserToAuditUser(user)
 
-		if err := svc.auditLogger.WithTx(tx).LogWithMetadata(ctx, meta, enum.ActionAdminAssignRole, actor, target, changes); err != nil {
+		if err := svc.auditLogger.LogWithMetadata(ctx, meta, enum.ActionAdminAssignRole, actor, target, changes); err != nil {
 			return ErrAuditLogger
 		}
 

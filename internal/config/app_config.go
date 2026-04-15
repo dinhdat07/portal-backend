@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 
@@ -27,8 +28,14 @@ func Load() (*Config, error) {
 		return nil, errors.New("errors: cannot load env variables")
 	}
 
-	accessTTL, _ := strconv.Atoi(os.Getenv("JWT_ACCESS_TTL"))
-	refreshTTL, _ := strconv.Atoi(os.Getenv("JWT_REFRESH_TTL"))
+	accessTTL, err := strconv.Atoi(os.Getenv("JWT_ACCESS_TTL"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid JWT_REFRESH_TTL: %w", err)
+	}
+	refreshTTL, err := strconv.Atoi(os.Getenv("JWT_REFRESH_TTL"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid JWT_REFRESH_TTL: %w", err)
+	}
 
 	return &Config{
 		DBUrl:         os.Getenv("DB_URL"),

@@ -11,14 +11,13 @@ import (
 	appLogger "log"
 
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 type AuditLogService struct {
-	repo *repositories.AuditLogRepository
+	repo repositories.AuditLogRepository
 }
 
-func NewAuditLogService(repo *repositories.AuditLogRepository) *AuditLogService {
+func NewAuditLogService(repo repositories.AuditLogRepository) *AuditLogService {
 	return &AuditLogService{repo: repo}
 }
 
@@ -116,10 +115,4 @@ func (svc *AuditLogService) LogWithMetadata(ctx context.Context, meta *domain.Au
 		appLogger.Println(err)
 	}
 	return err
-}
-
-func (s *AuditLogService) WithTx(tx *gorm.DB) *AuditLogService {
-	return &AuditLogService{
-		repo: s.repo.WithTx(tx),
-	}
 }
