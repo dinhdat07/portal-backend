@@ -10,6 +10,9 @@ import (
 )
 
 type Config struct {
+	GRPCPort string
+	HTTPPort string
+
 	DBUrl         string
 	JWTSecret     string
 	JWTAccessTTL  int

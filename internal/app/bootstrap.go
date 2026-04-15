@@ -1,11 +1,10 @@
 package app
 
 import (
-	"fmt"
 	"portal-system/internal/auth"
 	"portal-system/internal/config"
+	portalgrpc "portal-system/internal/grpc"
 	"portal-system/internal/http/handlers"
-	"portal-system/internal/models"
 	"portal-system/internal/platform/email"
 	"portal-system/internal/platform/storage"
 	"portal-system/internal/platform/token"
@@ -20,7 +19,23 @@ import (
 type App struct {
 	Config *config.Config
 	DB     *gorm.DB
+
+	// transport - http
 	Router *gin.Engine
+
+	// auth
+	Authenticator *auth.Authenticator
+	Authorizer    *auth.Authorizer
+
+	// http handlers
+	AuthHandler  *handlers.AuthHandler
+	UserHandler  *handlers.UserHandler
+	AdminHandler *handlers.AdminHandler
+
+	// grpc servers
+	AuthGRPC  *portalgrpc.AuthServer
+	UserGRPC  *portalgrpc.UserServer
+	AdminGRPC *portalgrpc.AdminServer
 }
 
 func New() (*App, error) {
@@ -34,19 +49,16 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	// migrate
 	if err := AutoMigrate(db); err != nil {
 		return nil, err
 	}
 
-	// email service
 	smtpCfg, err := config.LoadSMTPConfig()
 	if err != nil {
 		return nil, err
 	}
 	emailService := email.NewSMTPEmailService(*smtpCfg)
 
-	// init repo
 	userRepo := storage.NewGormUserRepository(db)
 	auditLogRepo := storage.NewGormAuditLogRepository(db)
 	tokenRepo := storage.NewGormUserTokenRepository(db)
@@ -54,12 +66,10 @@ func New() (*App, error) {
 	sessionRepo := storage.NewGormAuthSessionRepository(db)
 	txManager := storage.NewGormTxManager(db)
 
-	// auth
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
 	authenticator := auth.NewAuthenticator(tokenManager, roleRepo)
 	authorizer := auth.NewAuthorizer()
 
-	// service
 	auditLogService := services.NewAuditLogService(auditLogRepo)
 
 	authService := services.NewAuthService(services.AuthServiceDeps{
@@ -92,18 +102,13 @@ func New() (*App, error) {
 		FrontendURL: cfg.FrontEndUrl,
 	})
 
-	// handler
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
 	adminHandler := handlers.NewAdminHandler(adminService, userService)
 
-	router := setupRouter(
-		authHandler,
-		userHandler,
-		adminHandler,
-		authenticator,
-		authorizer,
-	)
+	authGRPC := portalgrpc.NewAuthServer(authService)
+	userGRPC := portalgrpc.NewUserServer(userService)
+	adminGRPC := portalgrpc.NewAdminServer(adminService, userService)
 
 	if cfg.Env == "development" {
 		if err := seedPermissions(db); err != nil {
@@ -121,19 +126,15 @@ func New() (*App, error) {
 	}
 
 	return &App{
-		Config: cfg,
-		DB:     db,
-		Router: router,
+		Config:        cfg,
+		DB:            db,
+		Authenticator: authenticator,
+		Authorizer:    authorizer,
+		AuthHandler:   authHandler,
+		UserHandler:   userHandler,
+		AdminHandler:  adminHandler,
+		AuthGRPC:      authGRPC,
+		UserGRPC:      userGRPC,
+		AdminGRPC:     adminGRPC,
 	}, nil
-
-}
-
-func (a *App) Run() error {
-	return a.Router.Run(fmt.Sprintf(":%s", a.Config.Port))
-}
-
-func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&models.User{}, &models.AuditLog{}, &models.UserToken{}, &models.Role{}, &models.Permission{}, &models.AuthSession{},
-	)
 }
