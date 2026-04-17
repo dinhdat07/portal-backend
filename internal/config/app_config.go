@@ -33,16 +33,24 @@ func Load() (*Config, error) {
 
 	accessTTL, err := strconv.Atoi(os.Getenv("JWT_ACCESS_TTL"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid JWT_REFRESH_TTL: %w", err)
+		return nil, fmt.Errorf("invalid JWT_ACCESS_TTL: %w", err)
 	}
 	refreshTTL, err := strconv.Atoi(os.Getenv("JWT_REFRESH_TTL"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid JWT_REFRESH_TTL: %w", err)
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		// Backward compatibility with older env key.
+		jwtSecret = os.Getenv("JWT_SECRET_KEY")
+	}
+
 	return &Config{
+		GRPCPort:      os.Getenv("GRPC_PORT"),
+		HTTPPort:      os.Getenv("HTTP_PORT"),
 		DBUrl:         os.Getenv("DB_URL"),
-		JWTSecret:     os.Getenv("JWT_SECRET"),
+		JWTSecret:     jwtSecret,
 		JWTAccessTTL:  accessTTL,
 		RefreshTTL:    refreshTTL,
 		Port:          os.Getenv("PORT"),

@@ -43,14 +43,14 @@ func RunGRPCServer(addr string, server *grpc.Server) error {
 func buildGRPCPublicMethods() map[string]bool {
 	return map[string]bool{
 		// auth public
-		"/auth.v1.AuthService/RegisterUser":       true,
-		"/auth.v1.AuthService/LogIn":              true,
-		"/auth.v1.AuthService/VerifyEmail":        true,
-		"/auth.v1.AuthService/ResendVerification": true,
-		"/auth.v1.AuthService/SetPassword":        true,
-		"/auth.v1.AuthService/ResetPassword":      true,
-		"/auth.v1.AuthService/ForgotPassword":     true,
-		"/auth.v1.AuthService/Refresh":            true,
+		authv1.AuthService_Register_FullMethodName:           true,
+		authv1.AuthService_Login_FullMethodName:              true,
+		authv1.AuthService_VerifyEmail_FullMethodName:        true,
+		authv1.AuthService_ResendVerification_FullMethodName: true,
+		authv1.AuthService_SetPassword_FullMethodName:        true,
+		authv1.AuthService_ResetPassword_FullMethodName:      true,
+		authv1.AuthService_ForgotPassword_FullMethodName:     true,
+		authv1.AuthService_RefreshToken_FullMethodName:       true,
 	}
 }
 
@@ -60,17 +60,17 @@ func buildGRPCPublicMethods() map[string]bool {
 func buildGRPCMethodPermissions() map[string]constants.PermissionCode {
 	return map[string]constants.PermissionCode{
 		// user self-service
-		"/user.v1.UserService/GetMyProfile":     constants.PermProfileReadSelf,
-		"/user.v1.UserService/UpdateProfile":    constants.PermProfileUpdateSelf,
-		"/user.v1.UserService/ChangeMyPassword": constants.PermProfileChangePassword,
+		userv1.UserService_GetMyProfile_FullMethodName:     constants.PermProfileReadSelf,
+		userv1.UserService_UpdateMyProfile_FullMethodName:  constants.PermProfileUpdateSelf,
+		userv1.UserService_ChangeMyPassword_FullMethodName: constants.PermProfileChangePassword,
 
 		// admin user management
-		"/admin.v1.AdminService/ListUsers":     constants.PermUserList,
-		"/admin.v1.AdminService/CreateUser":    constants.PermUserCreate,
-		"/admin.v1.AdminService/GetUserDetail": constants.PermUserReadDetail,
-		"/admin.v1.AdminService/UpdateUser":    constants.PermUserUpdate,
-		"/admin.v1.AdminService/DeleteUser":    constants.PermUserDelete,
-		"/admin.v1.AdminService/RestoreUser":   constants.PermUserRestore,
-		"/admin.v1.AdminService/UpdateRole":    constants.PermUserRoleUpdate,
+		adminv1.AdminService_ListUsers_FullMethodName:      constants.PermUserList,
+		adminv1.AdminService_CreateUser_FullMethodName:     constants.PermUserCreate,
+		adminv1.AdminService_GetUserDetail_FullMethodName:  constants.PermUserReadDetail,
+		adminv1.AdminService_UpdateUser_FullMethodName:     constants.PermUserUpdate,
+		adminv1.AdminService_DeleteUser_FullMethodName:     constants.PermUserDelete,
+		adminv1.AdminService_RestoreUser_FullMethodName:    constants.PermUserRestore,
+		adminv1.AdminService_UpdateUserRole_FullMethodName: constants.PermUserRoleUpdate,
 	}
 }
