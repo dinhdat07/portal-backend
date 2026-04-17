@@ -468,7 +468,7 @@ func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refre
 	refreshTokenHash := token.HashToken(refreshToken)
 	session, err := s.sessionRepo.FindActiveByRefreshTokenHash(ctx, refreshTokenHash)
 	if err != nil {
-		return nil, ErrInvalidCredentials
+		return nil, ErrInvalidRefreshToken
 	}
 
 	user, err := s.userRepo.FindByID(ctx, session.UserID)

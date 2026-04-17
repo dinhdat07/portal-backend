@@ -83,7 +83,7 @@ func (s *AdminServer) ListUsers(ctx context.Context, req *adminv1.ListUsersReque
 	if req.Role != nil {
 		roleCode, ok := mappers.RoleCodeFromPB(req.GetRole())
 		if !ok {
-			return nil, gstatus.Error(codes.InvalidArgument, "invalid role")
+			return nil, gstatus.Error(codes.InvalidArgument, "invalid role code")
 		}
 		filter.RoleCode = &roleCode
 	}
@@ -118,7 +118,8 @@ func (s *AdminServer) CreateUser(ctx context.Context, req *adminv1.CreateUserReq
 
 	roleCode, ok := mappers.RoleCodeFromPB(req.GetRole())
 	if !ok {
-		return nil, gstatus.Error(codes.InvalidArgument, "invalid role")
+
+		return nil, gstatus.Error(codes.InvalidArgument, "invalid role code")
 	}
 
 	dob, err := time.Parse(dateLayout, req.GetDob())
@@ -278,7 +279,7 @@ func (s *AdminServer) UpdateUserRole(ctx context.Context, req *adminv1.UpdateUse
 
 	roleCode, ok := mappers.RoleCodeFromPB(req.GetRole())
 	if !ok {
-		return nil, gstatus.Error(codes.InvalidArgument, "invalid role")
+		return nil, gstatus.Error(codes.InvalidArgument, "invalid role code")
 	}
 
 	meta := getAuditFromCtx(ctx)

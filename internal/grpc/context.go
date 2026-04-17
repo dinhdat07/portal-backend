@@ -2,6 +2,7 @@ package portalgrpc
 
 import (
 	"context"
+	"errors"
 	"net"
 	"portal-system/internal/auth"
 	"portal-system/internal/domain"
@@ -42,45 +43,30 @@ func getAuditFromCtx(ctx context.Context) *domain.AuditMeta {
 }
 
 func getActorFromCtx(ctx context.Context) (*domain.AuditUser, error) {
-	v := ctx.Value(AuditUserContextKey)
-	if v == nil {
-		return nil, gstatus.Error(codes.Unauthenticated, "missing authenticated user")
+	principal, exists := GetPrincipal(ctx)
+	if principal == nil || !exists {
+		return nil, errors.New("missing principal in context")
 	}
 
-	actor, ok := v.(*domain.AuditUser)
-	if !ok || actor == nil {
-		return nil, gstatus.Error(codes.Unauthenticated, "invalid authenticated user")
-	}
-
-	return actor, nil
+	return &domain.AuditUser{
+		ID:       principal.UserID,
+		Username: principal.Username,
+		Email:    principal.Email,
+		RoleCode: principal.RoleCode,
+	}, nil
 }
 
 func getSessionIDFromCtx(ctx context.Context) (uuid.UUID, error) {
-	v := ctx.Value(SessionIDContextKey)
-	if v == nil {
+	principal, exists := GetPrincipal(ctx)
+	if principal == nil || !exists {
+		return uuid.Nil, errors.New("missing principal in context")
+	}
+
+	if principal.SessionID == uuid.Nil {
 		return uuid.Nil, gstatus.Error(codes.Unauthenticated, "missing session id")
 	}
 
-	switch sessionID := v.(type) {
-	case uuid.UUID:
-		if sessionID == uuid.Nil {
-			return uuid.Nil, gstatus.Error(codes.Unauthenticated, "invalid session id")
-		}
-		return sessionID, nil
-	case *uuid.UUID:
-		if sessionID == nil || *sessionID == uuid.Nil {
-			return uuid.Nil, gstatus.Error(codes.Unauthenticated, "invalid session id")
-		}
-		return *sessionID, nil
-	case string:
-		id, err := uuid.Parse(sessionID)
-		if err != nil {
-			return uuid.Nil, gstatus.Error(codes.Unauthenticated, "invalid session id")
-		}
-		return id, nil
-	default:
-		return uuid.Nil, gstatus.Error(codes.Unauthenticated, "invalid session id")
-	}
+	return principal.SessionID, nil
 }
 
 func SetPrincipal(ctx context.Context, principal *auth.Principal) context.Context {
