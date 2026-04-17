@@ -12,10 +12,20 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (a *App) NewGatewayMux(ctx context.Context, grpcAddr string) (http.Handler, error) {
 	mux := runtime.NewServeMux(
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
+			MarshalOptions: protojson.MarshalOptions{
+				UseProtoNames:   true,
+				EmitUnpopulated: true,
+			},
+			UnmarshalOptions: protojson.UnmarshalOptions{
+				DiscardUnknown: true,
+			},
+		}),
 		runtime.WithMetadata(func(ctx context.Context, r *http.Request) metadata.MD {
 			md := metadata.MD{}
 
