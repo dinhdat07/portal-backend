@@ -64,25 +64,27 @@ func New() (*App, error) {
 	tokenRepo := storage.NewGormUserTokenRepository(db)
 	roleRepo := storage.NewGormRoleRepository(db)
 	sessionRepo := storage.NewGormAuthSessionRepository(db)
+	refreshTokenRepo := storage.NewGormRefreshTokenRepository(db)
 	txManager := storage.NewGormTxManager(db)
 
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
-	authenticator := auth.NewAuthenticator(tokenManager, roleRepo)
+	authenticator := auth.NewAuthenticator(tokenManager, roleRepo, sessionRepo)
 	authorizer := auth.NewAuthorizer()
 
 	auditLogService := services.NewAuditLogService(auditLogRepo)
 
 	authService := services.NewAuthService(services.AuthServiceDeps{
-		TxManager:       txManager,
-		AuditLogger:     auditLogService,
-		UserRepo:        userRepo,
-		TokenRepo:       tokenRepo,
-		RoleRepo:        roleRepo,
-		SessionRepo:     sessionRepo,
-		TokenManager:    tokenManager,
-		EmailService:    emailService,
-		FrontendBaseURL: cfg.FrontEndUrl,
-		RefreshTTL:      time.Duration(cfg.RefreshTTL) * time.Second,
+		TxManager:        txManager,
+		AuditLogger:      auditLogService,
+		UserRepo:         userRepo,
+		TokenRepo:        tokenRepo,
+		RoleRepo:         roleRepo,
+		SessionRepo:      sessionRepo,
+		RefreshTokenRepo: refreshTokenRepo,
+		TokenManager:     tokenManager,
+		EmailService:     emailService,
+		FrontendBaseURL:  cfg.FrontEndUrl,
+		RefreshTTL:       time.Duration(cfg.RefreshTTL) * time.Second,
 	})
 
 	userService := services.NewUserService(services.UserServiceDeps{

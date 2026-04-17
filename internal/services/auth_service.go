@@ -22,43 +22,46 @@ import (
 )
 
 type AuthService struct {
-	txManager       repositories.TxManager
-	auditLogger     *AuditLogService
-	userRepo        repositories.UserRepository
-	tokenRepo       repositories.UserTokenRepository
-	roleRepo        repositories.RoleRepository
-	sessionRepo     repositories.AuthSessionRepository
-	tokenManager    tokenIssuer
-	emailService    emailSender
-	frontendBaseURL string
-	refreshTTL      time.Duration
+	txManager        repositories.TxManager
+	auditLogger      *AuditLogService
+	userRepo         repositories.UserRepository
+	tokenRepo        repositories.UserTokenRepository
+	roleRepo         repositories.RoleRepository
+	sessionRepo      repositories.AuthSessionRepository
+	refreshTokenRepo repositories.RefreshTokenRepository
+	tokenManager     tokenIssuer
+	emailService     emailSender
+	frontendBaseURL  string
+	refreshTTL       time.Duration
 }
 
 type AuthServiceDeps struct {
-	TxManager       repositories.TxManager
-	AuditLogger     *AuditLogService
-	UserRepo        repositories.UserRepository
-	TokenRepo       repositories.UserTokenRepository
-	RoleRepo        repositories.RoleRepository
-	SessionRepo     repositories.AuthSessionRepository
-	TokenManager    tokenIssuer
-	EmailService    emailSender
-	FrontendBaseURL string
-	RefreshTTL      time.Duration
+	TxManager        repositories.TxManager
+	AuditLogger      *AuditLogService
+	UserRepo         repositories.UserRepository
+	TokenRepo        repositories.UserTokenRepository
+	RoleRepo         repositories.RoleRepository
+	SessionRepo      repositories.AuthSessionRepository
+	RefreshTokenRepo repositories.RefreshTokenRepository
+	TokenManager     tokenIssuer
+	EmailService     emailSender
+	FrontendBaseURL  string
+	RefreshTTL       time.Duration
 }
 
 func NewAuthService(deps AuthServiceDeps) *AuthService {
 	return &AuthService{
-		txManager:       deps.TxManager,
-		auditLogger:     deps.AuditLogger,
-		userRepo:        deps.UserRepo,
-		tokenRepo:       deps.TokenRepo,
-		roleRepo:        deps.RoleRepo,
-		sessionRepo:     deps.SessionRepo,
-		tokenManager:    deps.TokenManager,
-		emailService:    deps.EmailService,
-		frontendBaseURL: deps.FrontendBaseURL,
-		refreshTTL:      deps.RefreshTTL,
+		txManager:        deps.TxManager,
+		auditLogger:      deps.AuditLogger,
+		userRepo:         deps.UserRepo,
+		tokenRepo:        deps.TokenRepo,
+		roleRepo:         deps.RoleRepo,
+		sessionRepo:      deps.SessionRepo,
+		refreshTokenRepo: deps.RefreshTokenRepo,
+		tokenManager:     deps.TokenManager,
+		emailService:     deps.EmailService,
+		frontendBaseURL:  deps.FrontendBaseURL,
+		refreshTTL:       deps.RefreshTTL,
 	}
 }
 
@@ -184,9 +187,11 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 		return nil, ErrInternalServer
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	refreshTokenHash := token.HashToken(refreshToken)
 	refreshExpiresAt := now.Add(s.refreshTTL)
+	tokenFamilyID := uuid.New()
+
 	session := &models.AuthSession{
 		UserID:           user.ID,
 		RefreshTokenHash: refreshTokenHash,
@@ -199,7 +204,26 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 		session.IPAddress = meta.IPAddress
 	}
 
-	if err := s.sessionRepo.Create(ctx, session); err != nil {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.sessionRepo.Create(txCtx, session); err != nil {
+			return err
+		}
+
+		refreshTokenModel := &models.RefreshToken{
+			SessionID: session.ID,
+			UserID:    user.ID,
+			FamilyID:  tokenFamilyID,
+			TokenHash: refreshTokenHash,
+			ExpiresAt: refreshExpiresAt,
+		}
+
+		if err := s.refreshTokenRepo.Create(txCtx, refreshTokenModel); err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
 		return nil, ErrInternalServer
 	}
 
@@ -465,8 +489,24 @@ func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refre
 	if refreshToken == "" {
 		return nil, ErrInvalidInput
 	}
+
+	now := time.Now().UTC()
 	refreshTokenHash := token.HashToken(refreshToken)
-	session, err := s.sessionRepo.FindActiveByRefreshTokenHash(ctx, refreshTokenHash)
+	foundToken, err := s.refreshTokenRepo.FindByTokenHash(ctx, refreshTokenHash)
+	if err != nil || foundToken == nil {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	if foundToken.RevokedAt != nil {
+		s.handleRefreshTokenReuse(ctx, meta, foundToken)
+		return nil, ErrInvalidRefreshToken
+	}
+
+	if !foundToken.ExpiresAt.After(now) {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	session, err := s.sessionRepo.FindActiveByID(ctx, foundToken.SessionID)
 	if err != nil {
 		return nil, ErrInvalidRefreshToken
 	}
@@ -484,19 +524,46 @@ func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refre
 		return nil, ErrAccountNotVerified
 	}
 
-	now := time.Now()
-
 	newRefreshTokenHash, newRefreshToken, err := generateHashToken()
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServer
 	}
-	newRefreshExpiresAt := now.Add(s.refreshTTL)
 
-	err = s.sessionRepo.RotateRefreshToken(ctx, domain.RefreshInput{
-		SessionID:    session.ID,
-		NewTokenHash: newRefreshTokenHash,
-		NewExpiresAt: newRefreshExpiresAt,
-		RotatedAt:    now,
+	newRefreshExpiresAt := now.Add(s.refreshTTL)
+	if newRefreshExpiresAt.After(session.ExpiresAt) {
+		newRefreshExpiresAt = session.ExpiresAt
+	}
+	if !newRefreshExpiresAt.After(now) {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	newRefreshTokenModel := &models.RefreshToken{
+		SessionID: session.ID,
+		UserID:    user.ID,
+		FamilyID:  foundToken.FamilyID,
+		TokenHash: newRefreshTokenHash,
+		ExpiresAt: newRefreshExpiresAt,
+	}
+
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.refreshTokenRepo.RevokeByID(txCtx, foundToken.ID); err != nil {
+			return err
+		}
+
+		if err := s.refreshTokenRepo.Create(txCtx, newRefreshTokenModel); err != nil {
+			return err
+		}
+
+		if err := s.refreshTokenRepo.MarkReplacement(txCtx, foundToken.ID, newRefreshTokenModel.ID); err != nil {
+			return err
+		}
+
+		return s.sessionRepo.RotateRefreshToken(txCtx, domain.RefreshInput{
+			SessionID:    session.ID,
+			NewTokenHash: newRefreshTokenHash,
+			NewExpiresAt: session.ExpiresAt,
+			RotatedAt:    now,
+		})
 	})
 	if err != nil {
 		return nil, ErrInternalServer
@@ -522,6 +589,39 @@ func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refre
 
 }
 
+func (s *AuthService) handleRefreshTokenReuse(ctx context.Context, meta *domain.AuditMeta, reused *models.RefreshToken) {
+	if reused == nil || reused.UserID == uuid.Nil {
+		return
+	}
+
+	_ = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.sessionRepo.RevokeAllByUserID(txCtx, reused.UserID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		if err := s.refreshTokenRepo.RevokeByUserID(txCtx, reused.UserID); err != nil {
+			return err
+		}
+
+		if reused.FamilyID != uuid.Nil {
+			if err := s.refreshTokenRepo.RevokeByFamilyID(txCtx, reused.FamilyID); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	actor := &domain.AuditUser{ID: reused.UserID}
+	metadata := map[string]any{
+		"event":            "refresh_token_reuse_detected",
+		"session_id":       reused.SessionID.String(),
+		"refresh_token_id": reused.ID.String(),
+		"family_id":        reused.FamilyID.String(),
+	}
+	_ = s.auditLogger.LogWithMetadata(ctx, meta, enum.ActionRefreshTokenReuseDetected, actor, actor, metadata)
+}
+
 func (s *AuthService) Logout(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, sessionID uuid.UUID) error {
 	if actor == nil {
 		return ErrUnauthorized
@@ -531,10 +631,22 @@ func (s *AuthService) Logout(ctx context.Context, meta *domain.AuditMeta, actor 
 		return ErrInvalidInput
 	}
 
-	if err := s.sessionRepo.RevokeByID(ctx, sessionID); err != nil {
+	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.sessionRepo.RevokeByID(txCtx, sessionID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		if err := s.refreshTokenRepo.RevokeBySessionID(txCtx, sessionID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
 		return ErrInternalServer
 	}
 
+	_ = s.auditLogger.Log(ctx, meta, enum.ActionLogout, actor, actor)
 	return nil
 }
 
@@ -547,10 +659,22 @@ func (s *AuthService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, act
 		return ErrInvalidInput
 	}
 
-	if err := s.sessionRepo.RevokeAllByUserID(ctx, actor.ID); err != nil {
+	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.sessionRepo.RevokeAllByUserID(txCtx, actor.ID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		if err := s.refreshTokenRepo.RevokeByUserID(txCtx, actor.ID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
 		return ErrInternalServer
 	}
 
+	_ = s.auditLogger.Log(ctx, meta, enum.ActionLogoutAll, actor, actor)
 	return nil
 }
 

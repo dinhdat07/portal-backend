@@ -38,7 +38,7 @@ func newAdminServiceForTest(tx *txManagerMock, auditRepo *auditRepoMock, userRep
 	})
 }
 
-func newAuthServiceForTest(tx *txManagerMock, auditRepo *auditRepoMock, userRepo *userRepoMock, tokenRepo *tokenRepoMock, roleRepo *roleRepoMock, sessionRepo *sessionRepoMock, tokenMgr *tokenIssuerMock, email *emailSenderMock) *AuthService {
+func newAuthServiceForTest(tx *txManagerMock, auditRepo *auditRepoMock, userRepo *userRepoMock, tokenRepo *tokenRepoMock, roleRepo *roleRepoMock, sessionRepo *sessionRepoMock, refreshTokenRepo *refreshTokenRepoMock, tokenMgr *tokenIssuerMock, email *emailSenderMock) *AuthService {
 	if tx == nil {
 		tx = &txManagerMock{}
 	}
@@ -57,6 +57,9 @@ func newAuthServiceForTest(tx *txManagerMock, auditRepo *auditRepoMock, userRepo
 	if sessionRepo == nil {
 		sessionRepo = &sessionRepoMock{}
 	}
+	if refreshTokenRepo == nil {
+		refreshTokenRepo = &refreshTokenRepoMock{}
+	}
 	if tokenMgr == nil {
 		tokenMgr = &tokenIssuerMock{}
 	}
@@ -65,15 +68,16 @@ func newAuthServiceForTest(tx *txManagerMock, auditRepo *auditRepoMock, userRepo
 	}
 
 	return NewAuthService(AuthServiceDeps{
-		TxManager:       tx,
-		AuditLogger:     NewAuditLogService(auditRepo),
-		UserRepo:        userRepo,
-		TokenRepo:       tokenRepo,
-		RoleRepo:        roleRepo,
-		SessionRepo:     sessionRepo,
-		TokenManager:    tokenMgr,
-		EmailService:    email,
-		FrontendBaseURL: "http://frontend.local",
-		RefreshTTL:      24 * time.Hour,
+		TxManager:        tx,
+		AuditLogger:      NewAuditLogService(auditRepo),
+		UserRepo:         userRepo,
+		TokenRepo:        tokenRepo,
+		RoleRepo:         roleRepo,
+		SessionRepo:      sessionRepo,
+		RefreshTokenRepo: refreshTokenRepo,
+		TokenManager:     tokenMgr,
+		EmailService:     email,
+		FrontendBaseURL:  "http://frontend.local",
+		RefreshTTL:       24 * time.Hour,
 	})
 }

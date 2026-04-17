@@ -90,7 +90,7 @@ func TestAuthService_Register_Table(t *testing.T) {
 			email := &emailSenderMock{sendVerificationFn: func(ctx context.Context, to, name, verifyURL string) error {
 				return tc.emailErr
 			}}
-			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, roleRepo, nil, nil, email)
+			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, roleRepo, nil, nil, nil, email)
 
 			err := svc.Register(context.Background(), meta, "john@example.com", "john", "Passw0rd!", "John", "Doe", dob)
 			if tc.expectedErr == nil {
@@ -187,7 +187,7 @@ func TestAuthService_LogIn_Table(t *testing.T) {
 				expiresInSecondsFn: func() int { return 900 },
 			}
 
-			svc := newAuthServiceForTest(nil, &auditRepoMock{}, userRepo, nil, nil, sessionRepo, tokenMgr, nil)
+			svc := newAuthServiceForTest(nil, &auditRepoMock{}, userRepo, nil, nil, sessionRepo, nil, tokenMgr, nil)
 			result, err := svc.LogIn(context.Background(), &domain.AuditMeta{IPAddress: "127.0.0.1", UserAgent: "ua"}, tc.identifier, tc.password)
 			if tc.expectedErr == nil {
 				if err != nil {
@@ -260,7 +260,7 @@ func TestAuthService_VerifyEmail_Table(t *testing.T) {
 				},
 			}
 			auditRepo := &auditRepoMock{createFn: func(ctx context.Context, log *models.AuditLog) error { return tc.auditErr }}
-			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, nil, nil, nil, nil)
+			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, nil, nil, nil, nil, nil)
 
 			err := svc.VerifyEmail(context.Background(), meta, "raw-token", tc.tokenType)
 			if tc.expectedErr == nil {
@@ -319,7 +319,7 @@ func TestAuthService_ResendVerification_Table(t *testing.T) {
 			}
 			email := &emailSenderMock{sendVerificationFn: func(ctx context.Context, to, name, verifyURL string) error { return tc.emailErr }}
 			auditRepo := &auditRepoMock{createFn: func(ctx context.Context, log *models.AuditLog) error { return tc.auditErr }}
-			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, nil, nil, nil, email)
+			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, nil, nil, nil, nil, email)
 
 			err := svc.ResendVerification(context.Background(), meta, user.Email, enum.TokenTypeEmailVerification)
 			if tc.expectedErr == nil {
@@ -377,7 +377,7 @@ func TestAuthService_ForgotPassword_Table(t *testing.T) {
 			}
 			auditRepo := &auditRepoMock{createFn: func(ctx context.Context, log *models.AuditLog) error { return tc.auditErr }}
 			email := &emailSenderMock{sendResetFn: func(ctx context.Context, to, name, resetURL string) error { return tc.emailErr }}
-			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, nil, nil, nil, email)
+			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, nil, nil, nil, nil, email)
 
 			err := svc.ForgotPassword(context.Background(), meta, "john@example.com")
 			if tc.expectedErr == nil {
@@ -463,7 +463,7 @@ func TestAuthService_SetAndResetPassword_Table(t *testing.T) {
 			auditRepo := &auditRepoMock{createFn: func(ctx context.Context, log *models.AuditLog) error {
 				return tc.auditErr
 			}}
-			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, nil, nil, nil, nil)
+			svc := newAuthServiceForTest(nil, auditRepo, userRepo, tokenRepo, nil, nil, nil, nil, nil)
 
 			var err error
 			if tc.useReset {
@@ -493,33 +493,52 @@ func TestAuthService_Refresh_Table(t *testing.T) {
 		EmailVerifiedAt: ptrTime(now),
 		Role:            models.Role{ID: uuid.New(), Code: constants.RoleCodeUser},
 	}
-	baseSession := &models.AuthSession{ID: sessionID, UserID: userID}
+	baseSession := &models.AuthSession{ID: sessionID, UserID: userID, ExpiresAt: now.Add(24 * time.Hour)}
+	baseRefreshToken := &models.RefreshToken{
+		ID:        uuid.New(),
+		SessionID: sessionID,
+		UserID:    userID,
+		FamilyID:  uuid.New(),
+		TokenHash: "hashed-r1",
+		ExpiresAt: now.Add(1 * time.Hour),
+	}
 
 	tests := []struct {
-		name       string
-		token      string
-		sessionErr error
-		session    *models.AuthSession
-		userErr    error
-		user       *models.User
-		rotateErr  error
-		accessErr  error
-		expected   error
+		name               string
+		token              string
+		findTokenErr       error
+		foundToken         *models.RefreshToken
+		sessionErr         error
+		session            *models.AuthSession
+		userErr            error
+		user               *models.User
+		revokeTokenErr     error
+		createTokenErr     error
+		markReplacementErr error
+		rotateErr          error
+		accessErr          error
+		expected           error
 	}{
 		{name: "blank token", token: " ", expected: ErrInvalidInput},
-		{name: "invalid refresh session", token: "r1", sessionErr: errors.New("not found"), expected: ErrInvalidCredentials},
-		{name: "user lookup error", token: "r1", session: baseSession, userErr: errors.New("missing"), expected: ErrUserNotFound},
-		{name: "user deleted", token: "r1", session: baseSession, user: &models.User{ID: userID, DeletedAt: gorm.DeletedAt{Time: now, Valid: true}}, expected: ErrAccountDeleted},
-		{name: "email not verified", token: "r1", session: baseSession, user: &models.User{ID: userID}, expected: ErrAccountNotVerified},
-		{name: "rotate error", token: "r1", session: baseSession, user: cloneUser(baseUser), rotateErr: errors.New("rotate failed"), expected: ErrInternalServer},
-		{name: "access error", token: "r1", session: baseSession, user: cloneUser(baseUser), accessErr: errors.New("jwt failed"), expected: ErrInternalServer},
-		{name: "success", token: "r1", session: baseSession, user: cloneUser(baseUser)},
+		{name: "refresh token not found", token: "r1", findTokenErr: errors.New("not found"), expected: ErrInvalidRefreshToken},
+		{name: "reuse detected - token revoked", token: "r1", foundToken: &models.RefreshToken{ID: baseRefreshToken.ID, SessionID: sessionID, UserID: userID, FamilyID: baseRefreshToken.FamilyID, RevokedAt: ptrTime(now), ExpiresAt: now.Add(1 * time.Hour)}, expected: ErrInvalidRefreshToken},
+		{name: "refresh token expired", token: "r1", foundToken: &models.RefreshToken{ID: baseRefreshToken.ID, SessionID: sessionID, UserID: userID, FamilyID: baseRefreshToken.FamilyID, ExpiresAt: now.Add(-1 * time.Minute)}, expected: ErrInvalidRefreshToken},
+		{name: "invalid refresh session", token: "r1", foundToken: baseRefreshToken, sessionErr: errors.New("not found"), expected: ErrInvalidRefreshToken},
+		{name: "user lookup error", token: "r1", foundToken: baseRefreshToken, session: baseSession, userErr: errors.New("missing"), expected: ErrUserNotFound},
+		{name: "user deleted", token: "r1", foundToken: baseRefreshToken, session: baseSession, user: &models.User{ID: userID, DeletedAt: gorm.DeletedAt{Time: now, Valid: true}}, expected: ErrAccountDeleted},
+		{name: "email not verified", token: "r1", foundToken: baseRefreshToken, session: baseSession, user: &models.User{ID: userID}, expected: ErrAccountNotVerified},
+		{name: "revoke token error", token: "r1", foundToken: baseRefreshToken, session: baseSession, user: cloneUser(baseUser), revokeTokenErr: errors.New("revoke failed"), expected: ErrInternalServer},
+		{name: "create rotated token error", token: "r1", foundToken: baseRefreshToken, session: baseSession, user: cloneUser(baseUser), createTokenErr: errors.New("create failed"), expected: ErrInternalServer},
+		{name: "mark replacement error", token: "r1", foundToken: baseRefreshToken, session: baseSession, user: cloneUser(baseUser), markReplacementErr: errors.New("replace failed"), expected: ErrInternalServer},
+		{name: "rotate error", token: "r1", foundToken: baseRefreshToken, session: baseSession, user: cloneUser(baseUser), rotateErr: errors.New("rotate failed"), expected: ErrInternalServer},
+		{name: "access error", token: "r1", foundToken: baseRefreshToken, session: baseSession, user: cloneUser(baseUser), accessErr: errors.New("jwt failed"), expected: ErrInternalServer},
+		{name: "success", token: "r1", foundToken: baseRefreshToken, session: baseSession, user: cloneUser(baseUser)},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			sessionRepo := &sessionRepoMock{
-				findActiveByRefreshTokenHashFn: func(ctx context.Context, hashToken string) (*models.AuthSession, error) {
+				findActiveByIDFn: func(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
 					if tc.sessionErr != nil {
 						return nil, tc.sessionErr
 					}
@@ -527,6 +546,26 @@ func TestAuthService_Refresh_Table(t *testing.T) {
 				},
 				rotateRefreshTokenFn: func(ctx context.Context, in domain.RefreshInput) error {
 					return tc.rotateErr
+				},
+			}
+			refreshTokenRepo := &refreshTokenRepoMock{
+				findByTokenHashFn: func(ctx context.Context, tokenHash string) (*models.RefreshToken, error) {
+					if tc.findTokenErr != nil {
+						return nil, tc.findTokenErr
+					}
+					return tc.foundToken, nil
+				},
+				revokeByIDFn: func(ctx context.Context, id uuid.UUID) error {
+					return tc.revokeTokenErr
+				},
+				createFn: func(ctx context.Context, token *models.RefreshToken) error {
+					if token.ID == uuid.Nil {
+						token.ID = uuid.New()
+					}
+					return tc.createTokenErr
+				},
+				markReplacementFn: func(ctx context.Context, id uuid.UUID, replacementID uuid.UUID) error {
+					return tc.markReplacementErr
 				},
 			}
 			userRepo := &userRepoMock{
@@ -546,7 +585,7 @@ func TestAuthService_Refresh_Table(t *testing.T) {
 				},
 				expiresInSecondsFn: func() int { return 1200 },
 			}
-			svc := newAuthServiceForTest(nil, nil, userRepo, nil, nil, sessionRepo, tokenMgr, nil)
+			svc := newAuthServiceForTest(nil, nil, userRepo, nil, nil, sessionRepo, refreshTokenRepo, tokenMgr, nil)
 
 			res, err := svc.Refresh(context.Background(), &domain.AuditMeta{}, tc.token)
 			if tc.expected == nil {
@@ -585,7 +624,7 @@ func TestAuthService_Logout_Table(t *testing.T) {
 					return tc.revokeErr
 				},
 			}
-			svc := newAuthServiceForTest(nil, nil, nil, nil, nil, sessionRepo, nil, nil)
+			svc := newAuthServiceForTest(nil, nil, nil, nil, nil, sessionRepo, nil, nil, nil)
 			err := svc.Logout(context.Background(), &domain.AuditMeta{}, tc.actor, tc.sessionID)
 			if tc.expected == nil {
 				if err != nil {
@@ -619,7 +658,7 @@ func TestAuthService_LogoutAll_Table(t *testing.T) {
 					return tc.revokeErr
 				},
 			}
-			svc := newAuthServiceForTest(nil, nil, nil, nil, nil, sessionRepo, nil, nil)
+			svc := newAuthServiceForTest(nil, nil, nil, nil, nil, sessionRepo, nil, nil, nil)
 			err := svc.LogoutAll(context.Background(), &domain.AuditMeta{}, tc.actor)
 			if tc.expected == nil {
 				if err != nil {
