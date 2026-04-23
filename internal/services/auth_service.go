@@ -24,7 +24,7 @@ import (
 
 type AuthService struct {
 	txManager       repositories.TxManager
-	auditLogger     *AuditLogService
+	auditLogger     auditLogger
 	userRepo        repositories.UserRepository
 	refreshRepo     repositories.RefreshTokenRepository
 	tokenRepo       repositories.UserTokenRepository
@@ -39,7 +39,7 @@ type AuthService struct {
 
 type AuthServiceDeps struct {
 	TxManager        repositories.TxManager
-	AuditLogger      *AuditLogService
+	AuditLogger      auditLogger
 	UserRepo         repositories.UserRepository
 	RefreshTokenRepo repositories.RefreshTokenRepository
 	TokenRepo        repositories.UserTokenRepository

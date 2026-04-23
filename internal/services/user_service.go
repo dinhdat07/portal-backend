@@ -17,14 +17,14 @@ import (
 
 type UserService struct {
 	txManager   repositories.TxManager
-	auditLogger *AuditLogService
+	auditLogger auditLogger
 	roleRepo    repositories.RoleRepository
 	userRepo    repositories.UserRepository
 }
 
 type UserServiceDeps struct {
 	TxManager   repositories.TxManager
-	AuditLogger *AuditLogService
+	AuditLogger auditLogger
 	RoleRepo    repositories.RoleRepository
 	UserRepo    repositories.UserRepository
 }

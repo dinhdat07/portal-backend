@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"portal-system/internal/domain"
+	"portal-system/internal/domain/enum"
 	"portal-system/internal/platform/token"
 )
 
@@ -15,4 +17,9 @@ type tokenIssuer interface {
 	GenerateAccessToken(input token.GenerateAccessTokenInput) (string, error)
 	GenerateRefreshToken() (string, error)
 	ExpiresInSeconds() int
+}
+
+type auditLogger interface {
+	Log(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser) error
+	LogWithMetadata(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser, data map[string]any) error
 }

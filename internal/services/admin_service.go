@@ -19,7 +19,7 @@ import (
 
 type AdminService struct {
 	txManager   repositories.TxManager
-	auditLogger *AuditLogService
+	auditLogger auditLogger
 	userRepo    repositories.UserRepository
 	tokenRepo   repositories.UserTokenRepository
 	roleRepo    repositories.RoleRepository
@@ -29,7 +29,7 @@ type AdminService struct {
 
 type AdminServiceDeps struct {
 	TxManager   repositories.TxManager
-	AuditLogger *AuditLogService
+	AuditLogger auditLogger
 	UserRepo    repositories.UserRepository
 	TokenRepo   repositories.UserTokenRepository
 	RoleRepo    repositories.RoleRepository
