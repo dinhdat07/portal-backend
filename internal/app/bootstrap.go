@@ -71,6 +71,7 @@ func New() (*App, error) {
 	}
 
 	emailService := email.NewSMTPEmailService(*smtpCfg)
+	revocationStore := redisx.NewRedisSessionRevocationStore(rdb)
 
 	userRepo := storage.NewGormUserRepository(db)
 	auditLogRepo := storage.NewGormAuditLogRepository(db)
@@ -81,7 +82,7 @@ func New() (*App, error) {
 	txManager := storage.NewGormTxManager(db)
 
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
-	authenticator := auth.NewAuthenticator(tokenManager, roleRepo, sessionRepo)
+	authenticator := auth.NewAuthenticator(tokenManager, roleRepo, sessionRepo, revocationStore)
 	authorizer := auth.NewAuthorizer()
 
 	auditLogService := services.NewAuditLogService(auditLogRepo)

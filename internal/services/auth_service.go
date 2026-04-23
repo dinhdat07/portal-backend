@@ -30,6 +30,7 @@ type AuthService struct {
 	tokenRepo       repositories.UserTokenRepository
 	roleRepo        repositories.RoleRepository
 	sessionRepo     repositories.AuthSessionRepository
+	revoStore       SessionRevocationStore
 	tokenManager    tokenIssuer
 	emailService    emailSender
 	frontendBaseURL string
@@ -44,10 +45,12 @@ type AuthServiceDeps struct {
 	TokenRepo        repositories.UserTokenRepository
 	RoleRepo         repositories.RoleRepository
 	SessionRepo      repositories.AuthSessionRepository
-	TokenManager     tokenIssuer
-	EmailService     emailSender
-	FrontendBaseURL  string
-	RefreshTTL       time.Duration
+	revoStore        SessionRevocationStore
+
+	TokenManager    tokenIssuer
+	EmailService    emailSender
+	FrontendBaseURL string
+	RefreshTTL      time.Duration
 }
 
 func NewAuthService(deps AuthServiceDeps) *AuthService {
@@ -59,6 +62,7 @@ func NewAuthService(deps AuthServiceDeps) *AuthService {
 		tokenRepo:       deps.TokenRepo,
 		roleRepo:        deps.RoleRepo,
 		sessionRepo:     deps.SessionRepo,
+		revoStore:       deps.revoStore,
 		tokenManager:    deps.TokenManager,
 		emailService:    deps.EmailService,
 		frontendBaseURL: deps.FrontendBaseURL,
@@ -592,7 +596,12 @@ func (s *AuthService) handleRefreshTokenReuse(ctx context.Context, meta *domain.
 		return nil
 	}
 
-	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+	sessions, err := s.sessionRepo.ListActiveByUserID(ctx, reused.UserID)
+	if err != nil {
+		return ErrInternalServer
+	}
+
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.sessionRepo.RevokeAllByUserID(txCtx, reused.UserID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -605,6 +614,12 @@ func (s *AuthService) handleRefreshTokenReuse(ctx context.Context, meta *domain.
 	})
 	if err != nil {
 		return err
+	}
+
+	for _, session := range sessions {
+		if err := s.revoStore.MarkRevoked(ctx, session.ID, session.ExpiresAt); err != nil {
+			appLogger.Println(err)
+		}
 	}
 
 	actor := &domain.AuditUser{ID: reused.UserID}
@@ -630,7 +645,12 @@ func (s *AuthService) Logout(ctx context.Context, meta *domain.AuditMeta, actor 
 		return ErrInvalidInput
 	}
 
-	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+	session, err := s.sessionRepo.FindActiveByID(ctx, sessionID)
+	if err != nil || session == nil {
+		return ErrInvalidInput
+	}
+
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.sessionRepo.RevokeByID(txCtx, sessionID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -643,6 +663,10 @@ func (s *AuthService) Logout(ctx context.Context, meta *domain.AuditMeta, actor 
 	})
 	if err != nil {
 		return ErrInternalServer
+	}
+
+	if err := s.revoStore.MarkRevoked(ctx, session.ID, session.ExpiresAt); err != nil {
+		appLogger.Println(err)
 	}
 
 	if err := s.auditLogger.Log(ctx, meta, enum.ActionLogout, actor, actor); err != nil {
@@ -661,7 +685,12 @@ func (s *AuthService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, act
 		return ErrInvalidInput
 	}
 
-	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+	sessions, err := s.sessionRepo.ListActiveByUserID(ctx, actor.ID)
+	if err != nil {
+		return ErrInternalServer
+	}
+
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.sessionRepo.RevokeAllByUserID(txCtx, actor.ID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -674,6 +703,12 @@ func (s *AuthService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, act
 	})
 	if err != nil {
 		return ErrInternalServer
+	}
+
+	for _, session := range sessions {
+		if err := s.revoStore.MarkRevoked(ctx, session.ID, session.ExpiresAt); err != nil {
+			appLogger.Println(err)
+		}
 	}
 
 	if err := s.auditLogger.Log(ctx, meta, enum.ActionLogout, actor, actor); err != nil {

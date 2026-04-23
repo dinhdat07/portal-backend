@@ -639,22 +639,32 @@ func TestAuthService_Refresh_Table(t *testing.T) {
 
 func TestAuthService_Logout_Table(t *testing.T) {
 	actor := &domain.AuditUser{ID: uuid.New()}
+	session := &models.AuthSession{ID: uuid.New(), UserID: actor.ID, ExpiresAt: time.Now().Add(1 * time.Hour)}
 	tests := []struct {
-		name      string
-		actor     *domain.AuditUser
-		sessionID uuid.UUID
-		revokeErr error
-		expected  error
+		name         string
+		actor        *domain.AuditUser
+		sessionID    uuid.UUID
+		foundSession *models.AuthSession
+		findErr      error
+		revokeErr    error
+		expected     error
 	}{
 		{name: "nil actor", actor: nil, sessionID: uuid.New(), expected: ErrUnauthorized},
 		{name: "nil session", actor: actor, sessionID: uuid.Nil, expected: ErrInvalidInput},
-		{name: "revoke fails", actor: actor, sessionID: uuid.New(), revokeErr: errors.New("db failed"), expected: ErrInternalServer},
-		{name: "success", actor: actor, sessionID: uuid.New()},
+		{name: "session not found", actor: actor, sessionID: uuid.New(), findErr: errors.New("missing"), expected: ErrInvalidInput},
+		{name: "revoke fails", actor: actor, sessionID: session.ID, foundSession: session, revokeErr: errors.New("db failed"), expected: ErrInternalServer},
+		{name: "success", actor: actor, sessionID: session.ID, foundSession: session},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			sessionRepo := &sessionRepoMock{
+				findActiveByIDFn: func(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
+					if tc.findErr != nil {
+						return nil, tc.findErr
+					}
+					return tc.foundSession, nil
+				},
 				revokeByIDFn: func(ctx context.Context, sessionID uuid.UUID) error {
 					return tc.revokeErr
 				},
@@ -682,21 +692,34 @@ func TestAuthService_Logout_Table(t *testing.T) {
 
 func TestAuthService_LogoutAll_Table(t *testing.T) {
 	actor := &domain.AuditUser{ID: uuid.New()}
+	sessions := []models.AuthSession{
+		{ID: uuid.New(), UserID: actor.ID, ExpiresAt: time.Now().Add(1 * time.Hour)},
+		{ID: uuid.New(), UserID: actor.ID, ExpiresAt: time.Now().Add(2 * time.Hour)},
+	}
 	tests := []struct {
 		name      string
 		actor     *domain.AuditUser
+		sessions  []models.AuthSession
+		listErr   error
 		revokeErr error
 		expected  error
 	}{
 		{name: "nil actor", actor: nil, expected: ErrUnauthorized},
 		{name: "nil actor id", actor: &domain.AuditUser{ID: uuid.Nil}, expected: ErrInvalidInput},
-		{name: "revoke fails", actor: actor, revokeErr: errors.New("db failed"), expected: ErrInternalServer},
-		{name: "success", actor: actor},
+		{name: "list sessions fails", actor: actor, listErr: errors.New("db failed"), expected: ErrInternalServer},
+		{name: "revoke fails", actor: actor, sessions: sessions, revokeErr: errors.New("db failed"), expected: ErrInternalServer},
+		{name: "success", actor: actor, sessions: sessions},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			sessionRepo := &sessionRepoMock{
+				listActiveByUserIDFn: func(ctx context.Context, userID uuid.UUID) ([]models.AuthSession, error) {
+					if tc.listErr != nil {
+						return nil, tc.listErr
+					}
+					return tc.sessions, nil
+				},
 				revokeAllByUserIDFn: func(ctx context.Context, userID uuid.UUID) error {
 					return tc.revokeErr
 				},

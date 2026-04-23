@@ -80,6 +80,7 @@ func (r *GormAuthSessionRepository) RevokeAllByUserID(ctx context.Context, userI
 		Model(&models.AuthSession{}).
 		Where("user_id = ?", userID).
 		Where("revoked_at IS NULL").
+		Where("expires_at > ?", now).
 		Update("revoked_at", &now)
 
 	if result.Error != nil {
@@ -91,6 +92,23 @@ func (r *GormAuthSessionRepository) RevokeAllByUserID(ctx context.Context, userI
 	}
 
 	return nil
+}
+
+func (r *GormAuthSessionRepository) ListActiveByUserID(ctx context.Context, userID uuid.UUID) ([]models.AuthSession, error) {
+	now := time.Now().UTC()
+
+	var sessions []models.AuthSession
+	result := r.getDB(ctx).
+		Model(&models.AuthSession{}).
+		Where("user_id = ?", userID).
+		Where("revoked_at IS NULL").
+		Where("expires_at > ?", now).
+		Find(&sessions)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return sessions, nil
 }
 
 func (r *GormAuthSessionRepository) getDB(ctx context.Context) *gorm.DB {

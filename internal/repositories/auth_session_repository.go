@@ -12,4 +12,5 @@ type AuthSessionRepository interface {
 	FindActiveByID(ctx context.Context, id uuid.UUID) (*models.AuthSession, error)
 	RevokeByID(ctx context.Context, sessionID uuid.UUID) error
 	RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error
+	ListActiveByUserID(ctx context.Context, userID uuid.UUID) ([]models.AuthSession, error)
 }

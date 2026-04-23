@@ -16,6 +16,7 @@ type authServiceTestDeps struct {
 	roleRepo    *roleRepoMock
 	refreshRepo *refreshTokenRepoMock
 	sessionRepo *sessionRepoMock
+	revoStore   *sessionRevocationStoreMock
 	tokenMgr    *tokenIssuerMock
 	email       *emailSenderMock
 }
@@ -72,6 +73,9 @@ func newAuthServiceForTest(deps authServiceTestDeps) *AuthService {
 	if deps.sessionRepo == nil {
 		deps.sessionRepo = &sessionRepoMock{}
 	}
+	if deps.revoStore == nil {
+		deps.revoStore = &sessionRevocationStoreMock{}
+	}
 	if deps.tokenMgr == nil {
 		deps.tokenMgr = &tokenIssuerMock{}
 	}
@@ -87,6 +91,7 @@ func newAuthServiceForTest(deps authServiceTestDeps) *AuthService {
 		TokenRepo:        deps.tokenRepo,
 		RoleRepo:         deps.roleRepo,
 		SessionRepo:      deps.sessionRepo,
+		revoStore:        deps.revoStore,
 		TokenManager:     deps.tokenMgr,
 		EmailService:     deps.email,
 		FrontendBaseURL:  "http://frontend.local",

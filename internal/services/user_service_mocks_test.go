@@ -8,6 +8,7 @@ import (
 	"portal-system/internal/models"
 	"portal-system/internal/platform/token"
 	"portal-system/internal/repositories"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -262,9 +263,11 @@ type sessionRepoMock struct {
 	findActiveByIDFn        func(ctx context.Context, id uuid.UUID) (*models.AuthSession, error)
 	revokeByIDFn            func(ctx context.Context, sessionID uuid.UUID) error
 	revokeAllByUserIDFn     func(ctx context.Context, userID uuid.UUID) error
+	listActiveByUserIDFn    func(ctx context.Context, userID uuid.UUID) ([]models.AuthSession, error)
 	createCalled            int
 	revokeByIDCalled        int
 	revokeAllByUserIDCalled int
+	listActiveByUserIDCalls int
 }
 
 func (m *sessionRepoMock) Create(ctx context.Context, session *models.AuthSession) error {
@@ -296,6 +299,14 @@ func (m *sessionRepoMock) RevokeAllByUserID(ctx context.Context, userID uuid.UUI
 		return m.revokeAllByUserIDFn(ctx, userID)
 	}
 	return nil
+}
+
+func (m *sessionRepoMock) ListActiveByUserID(ctx context.Context, userID uuid.UUID) ([]models.AuthSession, error) {
+	m.listActiveByUserIDCalls++
+	if m.listActiveByUserIDFn != nil {
+		return m.listActiveByUserIDFn(ctx, userID)
+	}
+	return nil, nil
 }
 
 var _ repositories.AuthSessionRepository = (*sessionRepoMock)(nil)
@@ -364,6 +375,31 @@ func (m *refreshTokenRepoMock) MarkReplacement(ctx context.Context, id uuid.UUID
 }
 
 var _ repositories.RefreshTokenRepository = (*refreshTokenRepoMock)(nil)
+
+type sessionRevocationStoreMock struct {
+	markRevokedFn  func(ctx context.Context, sessionID uuid.UUID, expiresAt time.Time) error
+	isRevokedFn    func(ctx context.Context, sessionID uuid.UUID) (bool, error)
+	markCalled     int
+	isRevokedCalls int
+}
+
+func (m *sessionRevocationStoreMock) MarkRevoked(ctx context.Context, sessionID uuid.UUID, expiresAt time.Time) error {
+	m.markCalled++
+	if m.markRevokedFn != nil {
+		return m.markRevokedFn(ctx, sessionID, expiresAt)
+	}
+	return nil
+}
+
+func (m *sessionRevocationStoreMock) IsRevoked(ctx context.Context, sessionID uuid.UUID) (bool, error) {
+	m.isRevokedCalls++
+	if m.isRevokedFn != nil {
+		return m.isRevokedFn(ctx, sessionID)
+	}
+	return false, nil
+}
+
+var _ SessionRevocationStore = (*sessionRevocationStoreMock)(nil)
 
 type emailSenderMock struct {
 	sendVerificationFn func(ctx context.Context, to, name, verifyURL string) error
