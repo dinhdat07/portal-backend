@@ -2,23 +2,35 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"portal-system/internal/platform/token"
 	"portal-system/internal/repositories"
 )
 
 type Authenticator struct {
-	manager  *token.Manager
-	roleRepo repositories.RoleRepository
+	manager     *token.Manager
+	roleRepo    repositories.RoleRepository
+	sessionRepo repositories.AuthSessionRepository
 }
 
-func NewAuthenticator(manager *token.Manager, roleRepo repositories.RoleRepository) *Authenticator {
-	return &Authenticator{manager: manager, roleRepo: roleRepo}
+func NewAuthenticator(manager *token.Manager, roleRepo repositories.RoleRepository, sessionRepo repositories.AuthSessionRepository) *Authenticator {
+	return &Authenticator{manager: manager, roleRepo: roleRepo, sessionRepo: sessionRepo}
 }
 
 func (a *Authenticator) Authenticate(ctx context.Context, tokenString string) (*Principal, error) {
 	claims, err := a.manager.Parse(tokenString)
 	if err != nil {
 		return nil, err
+	}
+
+	session, err := a.sessionRepo.FindActiveByID(ctx, claims.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.UserID != claims.UserID {
+
+		// SECURITY FLAG
+		return nil, errors.New("session does not belong to user")
 	}
 
 	role, err := a.roleRepo.GetWithPermissions(ctx, claims.RoleID)

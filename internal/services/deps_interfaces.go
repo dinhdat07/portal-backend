@@ -2,8 +2,7 @@ package services
 
 import (
 	"context"
-
-	"github.com/google/uuid"
+	"portal-system/internal/platform/token"
 )
 
 type emailSender interface {
@@ -13,7 +12,7 @@ type emailSender interface {
 }
 
 type tokenIssuer interface {
-	GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID, roleID uuid.UUID, roleCode string, email string, username string) (string, error)
+	GenerateAccessToken(input token.GenerateAccessTokenInput) (string, error)
 	GenerateRefreshToken() (string, error)
 	ExpiresInSeconds() int
 }

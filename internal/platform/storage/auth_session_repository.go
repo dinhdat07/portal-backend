@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"portal-system/internal/domain"
 	"portal-system/internal/models"
 	"time"
 
@@ -52,17 +51,6 @@ func (r *GormAuthSessionRepository) FindActiveByID(ctx context.Context, id uuid.
 	}
 
 	return &AuthSession, nil
-}
-
-func (r *GormAuthSessionRepository) RotateRefreshToken(ctx context.Context, in domain.RefreshInput) error {
-	return r.getDB(ctx).
-		Model(&models.AuthSession{}).
-		Where("id = ?", in.SessionID).
-		Updates(map[string]any{
-			"refresh_token_hash": in.NewTokenHash,
-			"expires_at":         in.NewExpiresAt,
-			"last_used_at":       in.RotatedAt,
-		}).Error
 }
 
 func (r *GormAuthSessionRepository) RevokeByID(ctx context.Context, sessionID uuid.UUID) error {

@@ -28,14 +28,14 @@ func New(secret string, ttlSec int) *Manager {
 	return &Manager{[]byte(secret), tokenTTL}
 }
 
-func (m *Manager) GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID, roleId uuid.UUID, roleCode string, email string, username string) (string, error) {
+func (m *Manager) GenerateAccessToken(input GenerateAccessTokenInput) (string, error) {
 	claims := Claims{
-		UserID:    userID,
-		SessionID: sessionID,
-		Username:  username,
-		RoleID:    roleId,
-		RoleCode:  roleCode,
-		Email:     email,
+		UserID:    input.UserID,
+		SessionID: input.SessionID,
+		Username:  input.Username,
+		RoleID:    input.RoleID,
+		RoleCode:  input.RoleCode,
+		Email:     input.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

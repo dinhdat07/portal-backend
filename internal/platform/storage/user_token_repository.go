@@ -19,14 +19,6 @@ func NewGormUserTokenRepository(db *gorm.DB) *GormUserTokenRepository {
 	return &GormUserTokenRepository{db: db}
 }
 
-func (r *GormUserTokenRepository) WithTx(tx any) *GormUserTokenRepository {
-	gormTx, ok := tx.(*gorm.DB)
-	if !ok {
-		return r
-	}
-	return &GormUserTokenRepository{db: gormTx}
-}
-
 func (r *GormUserTokenRepository) Create(ctx context.Context, token *models.UserToken) error {
 	return r.getDB(ctx).Create(token).Error
 }
