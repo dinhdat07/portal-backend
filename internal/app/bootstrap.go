@@ -1,11 +1,13 @@
 package app
 
 import (
+	"context"
 	"portal-system/internal/auth"
 	"portal-system/internal/config"
 	portalgrpc "portal-system/internal/grpc"
 	"portal-system/internal/http/handlers"
 	"portal-system/internal/platform/email"
+	redisx "portal-system/internal/platform/redis"
 	"portal-system/internal/platform/storage"
 	"portal-system/internal/platform/token"
 	"portal-system/internal/services"
@@ -44,6 +46,16 @@ func New() (*App, error) {
 		return nil, err
 	}
 
+	smtpCfg, err := config.LoadSMTPConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	redisCfg, err := config.LoadRedisConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	db, err := gorm.Open(postgres.Open(cfg.DBUrl), &gorm.Config{})
 	if err != nil {
 		return nil, err
@@ -53,10 +65,11 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	smtpCfg, err := config.LoadSMTPConfig()
-	if err != nil {
+	rdb := redisx.NewClient(redisCfg)
+	if err := redisx.Ping(context.Background(), rdb); err != nil {
 		return nil, err
 	}
+
 	emailService := email.NewSMTPEmailService(*smtpCfg)
 
 	userRepo := storage.NewGormUserRepository(db)
