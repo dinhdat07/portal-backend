@@ -8,6 +8,18 @@ func ptrTime(v time.Time) *time.Time {
 	return &v
 }
 
+type authServiceTestDeps struct {
+	tx          *txManagerMock
+	auditRepo   *auditRepoMock
+	userRepo    *userRepoMock
+	tokenRepo   *tokenRepoMock
+	roleRepo    *roleRepoMock
+	refreshRepo *refreshTokenRepoMock
+	sessionRepo *sessionRepoMock
+	tokenMgr    *tokenIssuerMock
+	email       *emailSenderMock
+}
+
 func newAdminServiceForTest(tx *txManagerMock, auditRepo *auditRepoMock, userRepo *userRepoMock, tokenRepo *tokenRepoMock, roleRepo *roleRepoMock, email *emailSenderMock) *AdminService {
 	if tx == nil {
 		tx = &txManagerMock{}
@@ -38,42 +50,46 @@ func newAdminServiceForTest(tx *txManagerMock, auditRepo *auditRepoMock, userRep
 	})
 }
 
-func newAuthServiceForTest(tx *txManagerMock, auditRepo *auditRepoMock, userRepo *userRepoMock, tokenRepo *tokenRepoMock, roleRepo *roleRepoMock, sessionRepo *sessionRepoMock, tokenMgr *tokenIssuerMock, email *emailSenderMock) *AuthService {
-	if tx == nil {
-		tx = &txManagerMock{}
+func newAuthServiceForTest(deps authServiceTestDeps) *AuthService {
+	if deps.tx == nil {
+		deps.tx = &txManagerMock{}
 	}
-	if auditRepo == nil {
-		auditRepo = &auditRepoMock{}
+	if deps.auditRepo == nil {
+		deps.auditRepo = &auditRepoMock{}
 	}
-	if userRepo == nil {
-		userRepo = &userRepoMock{}
+	if deps.userRepo == nil {
+		deps.userRepo = &userRepoMock{}
 	}
-	if tokenRepo == nil {
-		tokenRepo = &tokenRepoMock{}
+	if deps.tokenRepo == nil {
+		deps.tokenRepo = &tokenRepoMock{}
 	}
-	if roleRepo == nil {
-		roleRepo = &roleRepoMock{}
+	if deps.roleRepo == nil {
+		deps.roleRepo = &roleRepoMock{}
 	}
-	if sessionRepo == nil {
-		sessionRepo = &sessionRepoMock{}
+	if deps.refreshRepo == nil {
+		deps.refreshRepo = &refreshTokenRepoMock{}
 	}
-	if tokenMgr == nil {
-		tokenMgr = &tokenIssuerMock{}
+	if deps.sessionRepo == nil {
+		deps.sessionRepo = &sessionRepoMock{}
 	}
-	if email == nil {
-		email = &emailSenderMock{}
+	if deps.tokenMgr == nil {
+		deps.tokenMgr = &tokenIssuerMock{}
+	}
+	if deps.email == nil {
+		deps.email = &emailSenderMock{}
 	}
 
 	return NewAuthService(AuthServiceDeps{
-		TxManager:       tx,
-		AuditLogger:     NewAuditLogService(auditRepo),
-		UserRepo:        userRepo,
-		TokenRepo:       tokenRepo,
-		RoleRepo:        roleRepo,
-		SessionRepo:     sessionRepo,
-		TokenManager:    tokenMgr,
-		EmailService:    email,
-		FrontendBaseURL: "http://frontend.local",
-		RefreshTTL:      24 * time.Hour,
+		TxManager:        deps.tx,
+		AuditLogger:      NewAuditLogService(deps.auditRepo),
+		UserRepo:         deps.userRepo,
+		RefreshTokenRepo: deps.refreshRepo,
+		TokenRepo:        deps.tokenRepo,
+		RoleRepo:         deps.roleRepo,
+		SessionRepo:      deps.sessionRepo,
+		TokenManager:     deps.tokenMgr,
+		EmailService:     deps.email,
+		FrontendBaseURL:  "http://frontend.local",
+		RefreshTTL:       24 * time.Hour,
 	})
 }

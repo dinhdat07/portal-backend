@@ -6,6 +6,7 @@ import (
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
+	"portal-system/internal/platform/token"
 	"portal-system/internal/repositories"
 
 	"github.com/google/uuid"
@@ -257,17 +258,13 @@ func (m *tokenRepoMock) RevokeByUserAndType(ctx context.Context, userID uuid.UUI
 var _ repositories.UserTokenRepository = (*tokenRepoMock)(nil)
 
 type sessionRepoMock struct {
-	createFn                        func(ctx context.Context, session *models.AuthSession) error
-	findActiveByRefreshTokenHashFn  func(ctx context.Context, hashToken string) (*models.AuthSession, error)
-	findActiveByIDFn                func(ctx context.Context, id uuid.UUID) (*models.AuthSession, error)
-	rotateRefreshTokenFn            func(ctx context.Context, in domain.RefreshInput) error
-	revokeByIDFn                    func(ctx context.Context, sessionID uuid.UUID) error
-	revokeAllByUserIDFn             func(ctx context.Context, userID uuid.UUID) error
-	createCalled                    int
-	findActiveByRefreshTokenCalled  int
-	rotateRefreshTokenCalled        int
-	revokeByIDCalled                int
-	revokeAllByUserIDCalled         int
+	createFn                func(ctx context.Context, session *models.AuthSession) error
+	findActiveByIDFn        func(ctx context.Context, id uuid.UUID) (*models.AuthSession, error)
+	revokeByIDFn            func(ctx context.Context, sessionID uuid.UUID) error
+	revokeAllByUserIDFn     func(ctx context.Context, userID uuid.UUID) error
+	createCalled            int
+	revokeByIDCalled        int
+	revokeAllByUserIDCalled int
 }
 
 func (m *sessionRepoMock) Create(ctx context.Context, session *models.AuthSession) error {
@@ -278,27 +275,11 @@ func (m *sessionRepoMock) Create(ctx context.Context, session *models.AuthSessio
 	return nil
 }
 
-func (m *sessionRepoMock) FindActiveByRefreshTokenHash(ctx context.Context, hashToken string) (*models.AuthSession, error) {
-	m.findActiveByRefreshTokenCalled++
-	if m.findActiveByRefreshTokenHashFn != nil {
-		return m.findActiveByRefreshTokenHashFn(ctx, hashToken)
-	}
-	return nil, nil
-}
-
 func (m *sessionRepoMock) FindActiveByID(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
 	if m.findActiveByIDFn != nil {
 		return m.findActiveByIDFn(ctx, id)
 	}
 	return nil, nil
-}
-
-func (m *sessionRepoMock) RotateRefreshToken(ctx context.Context, in domain.RefreshInput) error {
-	m.rotateRefreshTokenCalled++
-	if m.rotateRefreshTokenFn != nil {
-		return m.rotateRefreshTokenFn(ctx, in)
-	}
-	return nil
 }
 
 func (m *sessionRepoMock) RevokeByID(ctx context.Context, sessionID uuid.UUID) error {
@@ -318,6 +299,71 @@ func (m *sessionRepoMock) RevokeAllByUserID(ctx context.Context, userID uuid.UUI
 }
 
 var _ repositories.AuthSessionRepository = (*sessionRepoMock)(nil)
+
+type refreshTokenRepoMock struct {
+	createFn             func(ctx context.Context, token *models.RefreshToken) error
+	findByTokenHashFn    func(ctx context.Context, tokenHash string) (*models.RefreshToken, error)
+	revokeByIDFn         func(ctx context.Context, id uuid.UUID) error
+	revokeByUserIDFn     func(ctx context.Context, userID uuid.UUID) error
+	revokeBySessionIDFn  func(ctx context.Context, sessionID uuid.UUID) error
+	markReplacementFn    func(ctx context.Context, id uuid.UUID, replacementID uuid.UUID) error
+	createCalled         int
+	findByTokenHashCalls int
+	revokeByIDCalled     int
+	revokeByUserIDCalled int
+	revokeBySessionIDCnt int
+	markReplacementCalls int
+}
+
+func (m *refreshTokenRepoMock) Create(ctx context.Context, token *models.RefreshToken) error {
+	m.createCalled++
+	if m.createFn != nil {
+		return m.createFn(ctx, token)
+	}
+	return nil
+}
+
+func (m *refreshTokenRepoMock) FindByTokenHash(ctx context.Context, tokenHash string) (*models.RefreshToken, error) {
+	m.findByTokenHashCalls++
+	if m.findByTokenHashFn != nil {
+		return m.findByTokenHashFn(ctx, tokenHash)
+	}
+	return nil, nil
+}
+
+func (m *refreshTokenRepoMock) RevokeByID(ctx context.Context, id uuid.UUID) error {
+	m.revokeByIDCalled++
+	if m.revokeByIDFn != nil {
+		return m.revokeByIDFn(ctx, id)
+	}
+	return nil
+}
+
+func (m *refreshTokenRepoMock) RevokeByUserID(ctx context.Context, userID uuid.UUID) error {
+	m.revokeByUserIDCalled++
+	if m.revokeByUserIDFn != nil {
+		return m.revokeByUserIDFn(ctx, userID)
+	}
+	return nil
+}
+
+func (m *refreshTokenRepoMock) RevokeBySessionID(ctx context.Context, sessionID uuid.UUID) error {
+	m.revokeBySessionIDCnt++
+	if m.revokeBySessionIDFn != nil {
+		return m.revokeBySessionIDFn(ctx, sessionID)
+	}
+	return nil
+}
+
+func (m *refreshTokenRepoMock) MarkReplacement(ctx context.Context, id uuid.UUID, replacementID uuid.UUID) error {
+	m.markReplacementCalls++
+	if m.markReplacementFn != nil {
+		return m.markReplacementFn(ctx, id, replacementID)
+	}
+	return nil
+}
+
+var _ repositories.RefreshTokenRepository = (*refreshTokenRepoMock)(nil)
 
 type emailSenderMock struct {
 	sendVerificationFn func(ctx context.Context, to, name, verifyURL string) error
@@ -355,17 +401,17 @@ func (m *emailSenderMock) SendSetPasswordEmail(ctx context.Context, to, name, se
 var _ emailSender = (*emailSenderMock)(nil)
 
 type tokenIssuerMock struct {
-	generateAccessTokenFn func(userID uuid.UUID, sessionID uuid.UUID, roleID uuid.UUID, roleCode string, email string, username string) (string, error)
+	generateAccessTokenFn func(input token.GenerateAccessTokenInput) (string, error)
 	generateRefreshFn     func() (string, error)
 	expiresInSecondsFn    func() int
 	accessCalled          int
 	refreshCalled         int
 }
 
-func (m *tokenIssuerMock) GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID, roleID uuid.UUID, roleCode string, email string, username string) (string, error) {
+func (m *tokenIssuerMock) GenerateAccessToken(input token.GenerateAccessTokenInput) (string, error) {
 	m.accessCalled++
 	if m.generateAccessTokenFn != nil {
-		return m.generateAccessTokenFn(userID, sessionID, roleID, roleCode, email, username)
+		return m.generateAccessTokenFn(input)
 	}
 	return "access-token", nil
 }
@@ -386,4 +432,3 @@ func (m *tokenIssuerMock) ExpiresInSeconds() int {
 }
 
 var _ tokenIssuer = (*tokenIssuerMock)(nil)
-
