@@ -91,7 +91,7 @@ func newAuthServiceForTest(deps authServiceTestDeps) *AuthService {
 		TokenRepo:        deps.tokenRepo,
 		RoleRepo:         deps.roleRepo,
 		SessionRepo:      deps.sessionRepo,
-		revoStore:        deps.revoStore,
+		RevoStore:        deps.revoStore,
 		TokenManager:     deps.tokenMgr,
 		EmailService:     deps.email,
 		FrontendBaseURL:  "http://frontend.local",

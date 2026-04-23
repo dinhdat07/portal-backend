@@ -45,7 +45,7 @@ type AuthServiceDeps struct {
 	TokenRepo        repositories.UserTokenRepository
 	RoleRepo         repositories.RoleRepository
 	SessionRepo      repositories.AuthSessionRepository
-	revoStore        SessionRevocationStore
+	RevoStore        SessionRevocationStore
 
 	TokenManager    tokenIssuer
 	EmailService    emailSender
@@ -62,7 +62,7 @@ func NewAuthService(deps AuthServiceDeps) *AuthService {
 		tokenRepo:       deps.TokenRepo,
 		roleRepo:        deps.RoleRepo,
 		sessionRepo:     deps.SessionRepo,
-		revoStore:       deps.revoStore,
+		revoStore:       deps.RevoStore,
 		tokenManager:    deps.TokenManager,
 		emailService:    deps.EmailService,
 		frontendBaseURL: deps.FrontendBaseURL,

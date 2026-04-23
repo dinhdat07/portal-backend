@@ -95,6 +95,7 @@ func New() (*App, error) {
 		RoleRepo:         roleRepo,
 		RefreshTokenRepo: refreshRepo,
 		SessionRepo:      sessionRepo,
+		RevoStore:        revocationStore,
 		TokenManager:     tokenManager,
 		EmailService:     emailService,
 		FrontendBaseURL:  cfg.FrontEndUrl,
