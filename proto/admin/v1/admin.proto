@@ -6,6 +6,7 @@ option go_package = "portal-system/gen/go/admin/v1;adminv1";
 
 import "google/api/annotations.proto";
 import "common/v1/common.proto";
+import "validate/validate.proto";
 
 service AdminService {
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
@@ -56,14 +57,57 @@ service AdminService {
 }
 
 message ListUsersRequest {
-  int32 page = 1;
-  int32 page_size = 2;
-  optional string username = 3;
-  optional string email = 4;
-  optional string full_name = 5;
-  optional string dob = 6;
-  optional portal.common.v1.RoleCode role = 7;
-  optional portal.common.v1.UserStatus status = 8;
+  int32 page = 1 [
+    (validate.rules).int32 = {
+      gte: 1
+    }
+  ];
+
+  int32 page_size = 2 [
+    (validate.rules).int32 = {
+      gte: 1,
+      lte: 100
+    }
+  ];
+
+  optional string username = 3 [
+    (validate.rules).string = {
+      min_len: 3,
+      max_len: 50
+    }
+  ];
+
+  optional string email = 4 [
+    (validate.rules).string.email = true
+  ];
+
+  optional string full_name = 5 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 200
+    }
+  ];
+
+  optional string dob = 6 [
+    (validate.rules).string = {
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  ];
+
+  optional portal.common.v1.RoleCode role = 7 [
+    (validate.rules).enum = {
+      defined_only: true,
+      not_in: [0]
+    }
+  ];
+
+  optional portal.common.v1.UserStatus status = 8 [
+    (validate.rules).enum = {
+      defined_only: true,
+      not_in: [0]
+    }
+  ];
+
   bool include_deleted = 9;
 }
 
@@ -73,35 +117,105 @@ message ListUsersResponse {
 }
 
 message CreateUserRequest {
-  string email = 1;
-  string username = 2;
-  string first_name = 3;
-  string last_name = 4;
-  string dob = 5;
-  portal.common.v1.RoleCode role = 6;
+  string email = 1 [
+    (validate.rules).string.email = true
+  ];
+
+  string username = 2 [
+    (validate.rules).string = {
+      min_len: 3,
+      max_len: 50
+    }
+  ];
+
+  string first_name = 3 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 100
+    }
+  ];
+
+  string last_name = 4 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 100
+    }
+  ];
+
+  string dob = 5 [
+    (validate.rules).string = {
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  ];
+
+  portal.common.v1.RoleCode role = 6 [
+    (validate.rules).enum = {
+      defined_only: true,
+      not_in: [0]
+    }
+  ];
 }
 
 message GetUserDetailRequest {
-  string user_id = 1;
+  string user_id = 1 [
+    (validate.rules).string.uuid = true
+  ];
 }
 
 message UpdateUserRequest {
-  string user_id = 1;
-  optional string first_name = 2;
-  optional string last_name = 3;
-  optional string username = 4;
-  optional string dob = 5;
+  string user_id = 1 [
+    (validate.rules).string.uuid = true
+  ];
+
+  optional string first_name = 2 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 100
+    }
+  ];
+
+  optional string last_name = 3 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 100
+    }
+  ];
+
+  optional string username = 4 [
+    (validate.rules).string = {
+      min_len: 3,
+      max_len: 50
+    }
+  ];
+
+  optional string dob = 5 [
+    (validate.rules).string = {
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  ];
 }
 
 message DeleteUserRequest {
-  string user_id = 1;
+  string user_id = 1 [
+    (validate.rules).string.uuid = true
+  ];
 }
 
 message RestoreUserRequest {
-  string user_id = 1;
+  string user_id = 1 [
+    (validate.rules).string.uuid = true
+  ];
 }
 
 message UpdateUserRoleRequest {
-  string user_id = 1;
-  portal.common.v1.RoleCode role = 2;
+  string user_id = 1 [
+    (validate.rules).string.uuid = true
+  ];
+
+  portal.common.v1.RoleCode role = 2 [
+    (validate.rules).enum = {
+      defined_only: true,
+      not_in: [0]
+    }
+  ];
 }

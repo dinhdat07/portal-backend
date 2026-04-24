@@ -6,6 +6,7 @@ option go_package = "portal-system/gen/go/user/v1;userv1";
 
 import "google/api/annotations.proto";
 import "common/v1/common.proto";
+import "validate/validate.proto";
 
 service UserService {
   rpc GetMyProfile(GetMyProfileRequest) returns (portal.common.v1.User) {
@@ -32,14 +33,52 @@ service UserService {
 message GetMyProfileRequest {}
 
 message UpdateMyProfileRequest {
-  optional string first_name = 1;
-  optional string last_name = 2;
-  optional string username = 3;
-  optional string dob = 4;
+  optional string first_name = 1 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 100
+    }
+  ];
+
+  optional string last_name = 2 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 100
+    }
+  ];
+
+  optional string username = 3 [
+    (validate.rules).string = {
+      min_len: 3,
+      max_len: 50
+    }
+  ];
+
+  optional string dob = 4 [
+    (validate.rules).string = {
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  ];
 }
 
 message ChangeMyPasswordRequest {
-  string current_password = 1;
-  string new_password = 2;
-  string confirm_new_password = 3;
+  string current_password = 1 [
+    (validate.rules).string = {
+      min_len: 1
+    }
+  ];
+
+  string new_password = 2 [
+    (validate.rules).string = {
+      min_len: 8,
+      max_len: 255
+    }
+  ];
+
+  string confirm_new_password = 3 [
+    (validate.rules).string = {
+      min_len: 8,
+      max_len: 255
+    }
+  ];
 }

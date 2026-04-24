@@ -6,6 +6,8 @@ option go_package = "portal-system/gen/go/auth/v1;authv1";
 
 import "google/api/annotations.proto";
 import "common/v1/common.proto";
+import "validate/validate.proto";
+
 
 service AuthService {
   rpc Register(RegisterRequest) returns (portal.common.v1.MessageResponse) {
@@ -80,39 +82,109 @@ service AuthService {
 }
 
 message RegisterRequest {
-  string email = 1;
-  string username = 2;
-  string first_name = 3;
-  string last_name = 4;
-  string password = 5;
-  string dob = 6;
+  string email = 1 [
+    (validate.rules).string.email = true
+  ];
+
+  string username = 2 [
+    (validate.rules).string = {
+      min_len: 3,
+      max_len: 50
+    }
+  ];
+
+  string first_name = 3 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 100
+    }
+  ];
+
+  string last_name = 4 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 100
+    }
+  ];
+
+  string password = 5 [
+    (validate.rules).string = {
+      min_len: 8,
+      max_len: 255
+    }
+  ];
+
+  string dob = 6 [
+    (validate.rules).string = {
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  ];
 }
 
 message VerifyEmailRequest {
-  string token = 1;
+  string token = 1 [
+    (validate.rules).string = {
+      min_len: 1
+    }
+  ];
 }
 
 message ResendVerificationRequest {
-  string email = 1;
+  string email = 1 [
+    (validate.rules).string.email = true
+  ];
 }
 
 message SetPasswordRequest {
-  string token = 1;
-  string password = 2;
-  string confirm_password = 3;
+  string token = 1 [
+    (validate.rules).string = {
+      min_len: 1
+    }
+  ];
+
+  string password = 2 [
+    (validate.rules).string = {
+      min_len: 8,
+      max_len: 255
+    }
+  ];
+
+  string confirm_password = 3 [
+    (validate.rules).string = {
+      min_len: 8,
+      max_len: 255
+    }
+  ];
 }
 
 message ForgotPasswordRequest {
-  string email = 1;
+  string email = 1 [
+    (validate.rules).string.email = true
+  ];
 }
 
 message LoginRequest {
-  string identifier = 1;
-  string password = 2;
+  string identifier = 1 [
+    (validate.rules).string = {
+      min_len: 3,
+      max_len: 255
+    }
+  ];
+
+  string password = 2 [
+    (validate.rules).string = {
+      min_len: 1,
+      max_len: 255
+    }
+  ];
 }
 
 message RefreshRequest {
-  string refresh_token = 1;
+  string refresh_token = 1 [
+    (validate.rules).string = {
+      min_len: 1
+    }
+  ];
 }
 
 message LogoutRequest {}
