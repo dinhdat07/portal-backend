@@ -6,6 +6,7 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/dto"
+	"portal-system/internal/http/reqctx"
 	"portal-system/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	err := h.service.Register(c.Request.Context(), meta, req.Email, req.Username, req.Password, req.FirstName, req.LastName, req.Dob.Time)
 
@@ -62,7 +63,7 @@ func (h *AuthHandler) LogIn(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	result, err := h.service.LogIn(
 		c.Request.Context(),
@@ -100,10 +101,11 @@ func (h *AuthHandler) LogIn(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.LoginResponse{
-		AccessToken: result.AccessToken,
-		TokenType:   "Bearer",
-		ExpiresIn:   result.ExpiresIn,
-		User:        dto.ToUserResponse(result.User),
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    result.ExpiresIn,
+		User:         dto.ToUserResponse(result.User),
 	})
 }
 
@@ -116,7 +118,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 	err := h.service.VerifyEmail(c.Request.Context(), meta, req.Token, enum.TokenTypeEmailVerification)
 
 	if err != nil {
@@ -152,7 +154,7 @@ func (h *AuthHandler) ResendVerification(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	if err := h.service.ResendVerification(c.Request.Context(), meta, req.Email, enum.TokenTypeEmailVerification); err != nil {
 		switch {
@@ -187,7 +189,7 @@ func (h *AuthHandler) SetPassword(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	input := &domain.SetPasswordInput{
 		Token:           req.Token,
@@ -235,7 +237,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	input := &domain.SetPasswordInput{
 		Token:           req.Token,
@@ -290,7 +292,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	err := h.service.ForgotPassword(c.Request.Context(), meta, req.Email)
 	if err != nil {
@@ -302,5 +304,93 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.AuthMessageResponse{
 		Message: "If the account exists, a password reset email has been sent",
+	})
+}
+
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	req := &dto.RefreshRequest{}
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+		return
+	}
+
+	meta := reqctx.GetAuditMetaFromGin(c)
+
+	result, err := h.service.Refresh(c.Request.Context(), meta, req.RefreshToken)
+	if err != nil {
+		switch err {
+		case services.ErrInvalidInput:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case services.ErrInvalidRefreshToken:
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.RefreshResponse{
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    result.ExpiresIn,
+	})
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
+
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	sessionID, err := reqctx.GetSessionIDFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+		return
+	}
+
+	if err := h.service.Logout(c.Request.Context(), meta, actor, sessionID); err != nil {
+		switch err {
+		case services.ErrUnauthorized:
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		case services.ErrInvalidInput:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.AuthMessageResponse{
+		Message: "Logout successful",
+	})
+}
+
+func (h *AuthHandler) LogoutAll(c *gin.Context) {
+	meta := reqctx.GetAuditMetaFromGin(c)
+
+	actor, err := reqctx.GetActorFromGin(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.service.LogoutAll(c.Request.Context(), meta, actor); err != nil {
+		switch err {
+		case services.ErrUnauthorized:
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		case services.ErrInvalidInput:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.AuthMessageResponse{
+		Message: "All devices has been logged out",
 	})
 }

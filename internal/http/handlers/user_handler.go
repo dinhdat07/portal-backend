@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"portal-system/internal/domain"
 	"portal-system/internal/dto"
+	"portal-system/internal/http/reqctx"
 	"portal-system/internal/services"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type UserHandler struct {
@@ -22,8 +22,8 @@ func NewUserHandler(service *services.UserService) *UserHandler {
 
 func (h *UserHandler) GetMyProfile(c *gin.Context) {
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -64,25 +64,17 @@ func (h *UserHandler) ChangeMyPassword(c *gin.Context) {
 		return
 	}
 
-	userIDValue, exists := c.Get("user_id")
-	if !exists {
+	actor, err := reqctx.GetActorFromGin(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
 		})
 		return
 	}
 
-	userID, ok := userIDValue.(uuid.UUID)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid user id in token",
-		})
-		return
-	}
+	meta := reqctx.GetAuditMetaFromGin(c)
 
-	meta := getAuditMetaFromGin(c)
-
-	if err := h.userService.ChangePassword(c.Request.Context(), meta, userID, req.CurrentPassword, req.NewPassword, req.ConfirmPassword); err != nil {
+	if err := h.userService.ChangePassword(c.Request.Context(), meta, actor, req.CurrentPassword, req.NewPassword, req.ConfirmPassword); err != nil {
 		switch {
 		case errors.Is(err, services.ErrUnauthorized):
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -132,8 +124,8 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		DOB:       dob,
 	}
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",

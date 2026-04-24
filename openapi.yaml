@@ -9,8 +9,6 @@ info:
       - Authentication
       - User profile
       - Admin user management
-      - Action logs
-      - Dashboard analytics
 
 servers:
   - url: http://localhost:8000/api/v1
@@ -20,8 +18,6 @@ tags:
   - name: Auth
   - name: User
   - name: Admin
-  - name: Logs
-  - name: Dashboard
 
 paths:
   /auth/register:
@@ -197,6 +193,32 @@ paths:
           description: Account not verified or deleted
         '500':
           description: Internal server error
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token using refresh token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Invalid refresh token
+        '500':
+          description: Internal server error
+
   /auth/logout:
     post:
       tags: [Auth]
@@ -211,8 +233,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthMessageResponse'
+        '400':
+          description: Invalid input
         '401':
           description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      summary: Logout all sessions for current user
+      operationId: logoutAll
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout all successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMessageResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
 
   /users/me:
     get:
@@ -232,6 +279,8 @@ paths:
           description: Unauthorized
         '404':
           description: User not found
+        '500':
+          description: Internal server error
     put:
       tags: [User]
       summary: Update current user profile
@@ -332,7 +381,7 @@ paths:
         - in: query
           name: role
           schema:
-            $ref: '#/components/schemas/UserRole'
+            $ref: '#/components/schemas/RoleCode'
         - in: query
           name: status
           schema:
@@ -443,7 +492,7 @@ paths:
         '404':
           description: User not found
         '409':
-          description: Conflict
+          description: Username already exists
         '500':
           description: Internal server error
 
@@ -536,82 +585,6 @@ paths:
         '500':
           description: Internal server error
 
-
-  /admin/logs:
-    get:
-      tags: [Logs]
-      summary: Get action logs
-      operationId: getActionLogs
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: action
-          schema:
-            type: string
-        - in: query
-          name: actor_user_id
-          schema:
-            type: string
-            format: uuid
-        - in: query
-          name: target_user_id
-          schema:
-            type: string
-            format: uuid
-        - in: query
-          name: from
-          schema:
-            type: string
-            format: date-time
-        - in: query
-          name: to
-          schema:
-            type: string
-            format: date-time
-        - in: query
-          name: page
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - in: query
-          name: page_size
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-      responses:
-        '200':
-          description: Paginated logs
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedActionLogsResponse'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-
-  /admin/dashboard/summary:
-    get:
-      tags: [Dashboard]
-      summary: Get admin dashboard summary
-      operationId: getDashboardSummary
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Dashboard summary
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DashboardSummaryResponse'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
 components:
   securitySchemes:
     bearerAuth:
@@ -629,34 +602,13 @@ components:
         format: uuid
 
   schemas:
-    UserRole:
+    RoleCode:
       type: string
       enum: [user, admin]
 
     UserStatus:
       type: string
       enum: [pending_verification, active, deleted]
-
-    ActionName:
-      type: string
-      enum:
-        - REGISTER
-        - VERIFY_EMAIL
-        - RESEND_VERIFICATION
-        - SET_PASSWORD
-        - RESET_PASSWORD
-        - FORGOT_PASSWORD
-        - LOGIN
-        - LOGOUT
-        - UPDATE_PROFILE
-        - CHANGE_PASSWORD
-        - ADMIN_SEARCH_USER
-        - ADMIN_VIEW_USER
-        - ADMIN_CREATE_USER
-        - ADMIN_UPDATE_USER
-        - ADMIN_DELETE_USER
-        - ADMIN_RESTORE_USER
-        - ADMIN_ASSIGN_ROLE
 
     RegisterRequest:
       type: object
@@ -747,15 +699,45 @@ components:
           type: string
           format: password
 
+    RefreshRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+
+    RefreshResponse:
+      type: object
+      required:
+        - access_token
+        - refresh_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Access token expiry in seconds
+
     LoginResponse:
       type: object
       required:
         - access_token
+        - refresh_token
         - token_type
         - expires_in
         - user
       properties:
         access_token:
+          type: string
+        refresh_token:
           type: string
         token_type:
           type: string
@@ -780,17 +762,20 @@ components:
         first_name:
           type: string
           maxLength: 100
+          nullable: true
         last_name:
           type: string
           maxLength: 100
+          nullable: true
         username:
           type: string
           minLength: 3
           maxLength: 50
+          nullable: true
         dob:
           type: string
           format: date
-
+          nullable: true
     ChangePasswordRequest:
       type: object
       required:
@@ -839,7 +824,7 @@ components:
           type: string
           format: date
         role:
-          $ref: '#/components/schemas/UserRole'
+          $ref: '#/components/schemas/RoleCode'
 
     AdminUpdateUserRequest:
       type: object
@@ -847,16 +832,20 @@ components:
         first_name:
           type: string
           maxLength: 100
+          nullable: true
         last_name:
           type: string
           maxLength: 100
+          nullable: true
         username:
           type: string
           minLength: 3
           maxLength: 50
+          nullable: true
         dob:
           type: string
           format: date
+          nullable: true
 
     UpdateUserRoleRequest:
       type: object
@@ -864,7 +853,7 @@ components:
         - role
       properties:
         role:
-          $ref: '#/components/schemas/UserRole'
+          $ref: '#/components/schemas/RoleCode'
 
     UserResponse:
       type: object
@@ -896,7 +885,7 @@ components:
           format: date
           nullable: true
         role:
-          $ref: '#/components/schemas/UserRole'
+          type: string
         status:
           $ref: '#/components/schemas/UserStatus'
         email_verified_at:
@@ -919,62 +908,15 @@ components:
           nullable: true
         deleted_by:
           type: string
-          format: uuid
           nullable: true
-
-    ActionLogResponse:
-      type: object
-      required:
-        - id
-        - action
-        - created_at
-      properties:
-        id:
-          type: string
-          format: uuid
-        action:
-          $ref: '#/components/schemas/ActionName'
-        actor_user_id:
-          type: string
-          format: uuid
-          nullable: true
-        actor_username:
-          type: string
-          nullable: true
-        actor_email:
-          type: string
-          format: email
-          nullable: true
-        actor_role:
-          type: string
-          nullable: true
-        target_user_id:
-          type: string
-          format: uuid
-          nullable: true
-        target_username:
-          type: string
-          nullable: true
-        target_email:
-          type: string
-          format: email
-          nullable: true
-        target_role:
-          type: string
-          nullable: true
-        metadata:
-          type: object
-          additionalProperties: true
-          nullable: true
-        ip_address:
-          type: string
-          nullable: true
-        user_agent:
-          type: string
-          nullable: true
-        created_at:
+        restored_at:
           type: string
           format: date-time
+          nullable: true
+        restored_by:
+          type: string
+          format: uuid
+          nullable: true
 
     PaginationMeta:
       type: object
@@ -1002,62 +944,3 @@ components:
             $ref: '#/components/schemas/UserResponse'
         meta:
           $ref: '#/components/schemas/PaginationMeta'
-
-    PaginatedActionLogsResponse:
-      type: object
-      required:
-        - data
-        - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActionLogResponse'
-        meta:
-          $ref: '#/components/schemas/PaginationMeta'
-
-
-    DashboardSummaryResponse:
-      type: object
-      required:
-        - total_users
-        - total_pending_users
-        - total_deleted_users
-        - total_logins_today
-        - total_registers_today
-        - top_10_last_login_users
-      properties:
-        total_users:
-          type: integer
-        total_pending_users:
-          type: integer
-        total_deleted_users:
-          type: integer
-        total_logins_today:
-          type: integer
-        total_registers_today:
-          type: integer
-        top_10_last_login_users:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserLastLoginItem'
-
-    UserLastLoginItem:
-      type: object
-      required:
-        - user_id
-        - username
-        - email
-        - last_login_at
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        username:
-          type: string
-        email:
-          type: string
-          format: email
-        last_login_at:
-          type: string
-          format: date-time

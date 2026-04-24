@@ -22,11 +22,23 @@ type LoginRequest struct {
 	Password   string `json:"password" binding:"required"`
 }
 
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type RefreshResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+}
+
 type LoginResponse struct {
-	AccessToken string       `json:"access_token"`
-	TokenType   string       `json:"token_type"`
-	ExpiresIn   int          `json:"expires_in"`
-	User        UserResponse `json:"user"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	TokenType    string       `json:"token_type"`
+	ExpiresIn    int          `json:"expires_in"`
+	User         UserResponse `json:"user"`
 }
 
 type VerifyEmailRequest struct {

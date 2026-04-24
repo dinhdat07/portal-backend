@@ -2,18 +2,17 @@ package app
 
 import (
 	"fmt"
+	"portal-system/internal/auth"
 	"portal-system/internal/config"
-	"portal-system/internal/domain/enum"
 	"portal-system/internal/http/handlers"
 	"portal-system/internal/models"
 	"portal-system/internal/platform/email"
+	"portal-system/internal/platform/storage"
 	"portal-system/internal/platform/token"
-	"portal-system/internal/repositories"
 	"portal-system/internal/services"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -47,23 +46,75 @@ func New() (*App, error) {
 	}
 	emailService := email.NewSMTPEmailService(*smtpCfg)
 
-	// init
+	// init repo
+	userRepo := storage.NewGormUserRepository(db)
+	auditLogRepo := storage.NewGormAuditLogRepository(db)
+	tokenRepo := storage.NewGormUserTokenRepository(db)
+	roleRepo := storage.NewGormRoleRepository(db)
+	sessionRepo := storage.NewGormAuthSessionRepository(db)
+	txManager := storage.NewGormTxManager(db)
+
+	// auth
 	tokenManager := token.New(cfg.JWTSecret, cfg.JWTAccessTTL)
-	userRepo := repositories.NewUserRepository(db)
-	auditLogRepo := repositories.NewAuditLogRepository(db)
-	tokenRepo := repositories.NewUserTokenRepository(db)
+	authenticator := auth.NewAuthenticator(tokenManager, roleRepo)
+	authorizer := auth.NewAuthorizer()
 
+	// service
 	auditLogService := services.NewAuditLogService(auditLogRepo)
-	authService := services.NewAuthService(db, userRepo, tokenRepo, tokenManager, auditLogService, emailService, cfg.FrontEndUrl)
-	userService := services.NewUserService(db, userRepo, auditLogService)
-	adminService := services.NewAdminService(db, userRepo, tokenRepo, auditLogService, emailService, cfg.FrontEndUrl)
 
+	authService := services.NewAuthService(services.AuthServiceDeps{
+		TxManager:       txManager,
+		AuditLogger:     auditLogService,
+		UserRepo:        userRepo,
+		TokenRepo:       tokenRepo,
+		RoleRepo:        roleRepo,
+		SessionRepo:     sessionRepo,
+		TokenManager:    tokenManager,
+		EmailService:    emailService,
+		FrontendBaseURL: cfg.FrontEndUrl,
+		RefreshTTL:      time.Duration(cfg.RefreshTTL) * time.Second,
+	})
+
+	userService := services.NewUserService(services.UserServiceDeps{
+		TxManager:   txManager,
+		AuditLogger: auditLogService,
+		UserRepo:    userRepo,
+		RoleRepo:    roleRepo,
+	})
+
+	adminService := services.NewAdminService(services.AdminServiceDeps{
+		TxManager:   txManager,
+		AuditLogger: auditLogService,
+		UserRepo:    userRepo,
+		TokenRepo:   tokenRepo,
+		RoleRepo:    roleRepo,
+		EmailSvc:    emailService,
+		FrontendURL: cfg.FrontEndUrl,
+	})
+
+	// handler
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
 	adminHandler := handlers.NewAdminHandler(adminService, userService)
-	router := setupRouter(authHandler, userHandler, adminHandler, tokenManager)
+
+	router := setupRouter(
+		authHandler,
+		userHandler,
+		adminHandler,
+		authenticator,
+		authorizer,
+	)
 
 	if cfg.Env == "development" {
+		if err := seedPermissions(db); err != nil {
+			return nil, err
+		}
+		if err := seedRoles(db); err != nil {
+			return nil, err
+		}
+		if err := seedRolePermissions(db); err != nil {
+			return nil, err
+		}
 		if err := seedAdmin(db, cfg); err != nil {
 			return nil, err
 		}
@@ -77,43 +128,12 @@ func New() (*App, error) {
 
 }
 
-func seedAdmin(db *gorm.DB, cfg *config.Config) error {
-	var existing models.User
-	err := db.Where("email = ?", cfg.AdminEmail).First(&existing).Error
-	if err == nil {
-		return nil
-	} else if err != gorm.ErrRecordNotFound {
-		return err
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(cfg.AdminPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	hashStr := string(hash)
-	now := time.Now()
-
-	admin := &models.User{
-		Email:           cfg.AdminEmail,
-		Username:        "admin",
-		FirstName:       "System",
-		LastName:        "Admin",
-		PasswordHash:    &hashStr,
-		Role:            enum.RoleAdmin,
-		Status:          enum.StatusActive,
-		EmailVerifiedAt: &now,
-	}
-
-	return db.Create(admin).Error
-}
-
 func (a *App) Run() error {
 	return a.Router.Run(fmt.Sprintf(":%s", a.Config.Port))
 }
 
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
-		&models.User{}, &models.AuditLog{}, &models.UserToken{},
+		&models.User{}, &models.AuditLog{}, &models.UserToken{}, &models.Role{}, &models.Permission{}, &models.AuthSession{},
 	)
 }

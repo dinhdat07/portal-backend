@@ -15,7 +15,7 @@ type UserResponse struct {
 	FirstName       string          `json:"first_name"`
 	LastName        string          `json:"last_name"`
 	DOB             *time.Time      `json:"dob,omitempty"`
-	Role            enum.UserRole   `json:"role"`
+	RoleCode        string          `json:"role"`
 	Status          enum.UserStatus `json:"status"`
 	EmailVerifiedAt *time.Time      `json:"email_verified_at,omitempty"`
 	LastLoginAt     *time.Time      `json:"last_login_at,omitempty"`
@@ -52,7 +52,7 @@ func ToUserResponse(user *models.User) UserResponse {
 		FirstName:       user.FirstName,
 		LastName:        user.LastName,
 		DOB:             user.DOB,
-		Role:            user.Role,
+		RoleCode:        string(user.Role.Code),
 		Status:          user.Status,
 		EmailVerifiedAt: user.EmailVerifiedAt,
 		LastLoginAt:     user.LastLoginAt,

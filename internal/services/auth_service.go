@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"portal-system/internal/domain"
+	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
-	"portal-system/internal/platform/email"
 	"portal-system/internal/platform/token"
 	"portal-system/internal/repositories"
 
@@ -22,33 +22,69 @@ import (
 )
 
 type AuthService struct {
-	db              *gorm.DB
+	txManager       repositories.TxManager
 	auditLogger     *AuditLogService
-	userRepo        *repositories.UserRepository
-	tokenRepo       *repositories.UserTokenRepository
-	tokenManager    *token.Manager
-	emailService    *email.SMTPEmailService
+	userRepo        repositories.UserRepository
+	tokenRepo       repositories.UserTokenRepository
+	roleRepo        repositories.RoleRepository
+	sessionRepo     repositories.AuthSessionRepository
+	tokenManager    tokenIssuer
+	emailService    emailSender
 	frontendBaseURL string
+	refreshTTL      time.Duration
 }
 
-func NewAuthService(db *gorm.DB, userRepo *repositories.UserRepository, tokenRepo *repositories.UserTokenRepository, manager *token.Manager, logger *AuditLogService, emailService *email.SMTPEmailService, frontendUrl string) *AuthService {
-	return &AuthService{db: db, userRepo: userRepo, tokenRepo: tokenRepo, tokenManager: manager, auditLogger: logger, emailService: emailService, frontendBaseURL: frontendUrl}
+type AuthServiceDeps struct {
+	TxManager       repositories.TxManager
+	AuditLogger     *AuditLogService
+	UserRepo        repositories.UserRepository
+	TokenRepo       repositories.UserTokenRepository
+	RoleRepo        repositories.RoleRepository
+	SessionRepo     repositories.AuthSessionRepository
+	TokenManager    tokenIssuer
+	EmailService    emailSender
+	FrontendBaseURL string
+	RefreshTTL      time.Duration
+}
+
+func NewAuthService(deps AuthServiceDeps) *AuthService {
+	return &AuthService{
+		txManager:       deps.TxManager,
+		auditLogger:     deps.AuditLogger,
+		userRepo:        deps.UserRepo,
+		tokenRepo:       deps.TokenRepo,
+		roleRepo:        deps.RoleRepo,
+		sessionRepo:     deps.SessionRepo,
+		tokenManager:    deps.TokenManager,
+		emailService:    deps.EmailService,
+		frontendBaseURL: deps.FrontendBaseURL,
+		refreshTTL:      deps.RefreshTTL,
+	}
 }
 
 func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, email, username, password, firstName, lastName string, dob time.Time) error {
-	existing, _ := s.userRepo.FindByEmail(ctx, email)
-	// later: check email in blacklist
+	existing, err := s.userRepo.FindByEmail(ctx, email)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
 
 	if existing != nil && existing.ID != uuid.Nil {
 		return ErrEmailExists
 	}
 
-	existing, _ = s.userRepo.FindByUsername(ctx, username)
+	existing, err = s.userRepo.FindByUsername(ctx, username)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
 	if existing != nil && existing.ID != uuid.Nil {
 		return ErrUsernameExists
 	}
 
-	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return ErrInternalServer
+	}
 	hashStr := string(hash)
 
 	tokenHash, rawToken, err := generateHashToken()
@@ -56,7 +92,11 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 		return err
 	}
 
-	// currently set auto active (no verify needed) for easy testing
+	role, err := s.roleRepo.FindByCode(ctx, constants.RoleCodeUser)
+	if role == nil || err != nil {
+		return ErrInternalServer
+	}
+
 	user := &models.User{
 		Email:        email,
 		Username:     username,
@@ -64,17 +104,18 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 		LastName:     lastName,
 		DOB:          &dob,
 		PasswordHash: &hashStr,
-		Role:         enum.RoleUser,
+		RoleID:       role.ID,
+		Role:         *role,
 		Status:       enum.StatusPending,
 	}
 
 	// transaction, critical
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.userRepo.WithTx(tx).Create(ctx, user); err != nil {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.userRepo.Create(ctx, user); err != nil {
 			return err
 		}
 
-		if err := s.tokenRepo.WithTx(tx).
+		if err := s.tokenRepo.
 			RevokeByUserAndType(ctx, user.ID, enum.TokenTypeEmailVerification); err != nil {
 			return err
 		}
@@ -86,7 +127,7 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 			ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
 		}
 
-		if err := s.tokenRepo.WithTx(tx).Create(ctx, verifyToken); err != nil {
+		if err := s.tokenRepo.Create(ctx, verifyToken); err != nil {
 			return err
 		}
 
@@ -96,7 +137,8 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 			return ErrSendVerificationEmail
 		}
 
-		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionRegister, nil, user)
+		target := domain.MapUserToAuditUser(user)
+		return s.auditLogger.Log(ctx, meta, enum.ActionRegister, nil, target)
 	})
 
 	if err != nil {
@@ -137,18 +179,44 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 		return nil, ErrAccountDeleted
 	}
 
-	token, err := s.tokenManager.Generate(user.ID, user.Role, user.Email, user.Username)
+	refreshToken, err := s.tokenManager.GenerateRefreshToken()
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	now := time.Now()
+	refreshTokenHash := token.HashToken(refreshToken)
+	refreshExpiresAt := now.Add(s.refreshTTL)
+	session := &models.AuthSession{
+		UserID:           user.ID,
+		RefreshTokenHash: refreshTokenHash,
+		ExpiresAt:        refreshExpiresAt,
+		LastUsedAt:       &now,
+	}
+
+	if meta != nil {
+		session.UserAgent = meta.UserAgent
+		session.IPAddress = meta.IPAddress
+	}
+
+	if err := s.sessionRepo.Create(ctx, session); err != nil {
+		return nil, ErrInternalServer
+	}
+
+	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, session.ID, user.Role.ID, string(user.Role.Code), user.Email, user.Username)
 	if err != nil {
 		return nil, err
 	}
 
 	// best-effort
-	s.auditLogger.Log(ctx, meta, enum.ActionLogin, user, nil)
+	actor := domain.MapUserToAuditUser(user)
+	s.auditLogger.Log(ctx, meta, enum.ActionLogin, actor, nil)
 
 	return &domain.LoginResult{
-		AccessToken: token,
-		ExpiresIn:   s.tokenManager.ExpiresInSeconds(),
-		User:        user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    s.tokenManager.ExpiresInSeconds(),
+		User:         user,
 	}, nil
 }
 
@@ -173,16 +241,17 @@ func (s *AuthService) VerifyEmail(ctx context.Context, meta *domain.AuditMeta, r
 		return nil
 	}
 
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.userRepo.WithTx(tx).MarkEmailVerified(ctx, user.ID); err != nil {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.userRepo.MarkEmailVerified(ctx, user.ID); err != nil {
 			return err
 		}
 
-		if err := s.tokenRepo.WithTx(tx).MarkUsed(ctx, found.ID); err != nil {
+		if err := s.tokenRepo.MarkUsed(ctx, found.ID); err != nil {
 			return err
 		}
 
-		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionVerifyEmail, user, user)
+		actor := domain.MapUserToAuditUser(user)
+		return s.auditLogger.Log(ctx, meta, enum.ActionVerifyEmail, actor, actor)
 	})
 	if err != nil {
 		return ErrInternalServer
@@ -208,7 +277,7 @@ func (s *AuthService) ResendVerification(ctx context.Context, meta *domain.Audit
 		return err
 	}
 
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		verifyToken := &models.UserToken{
 			UserID:    user.ID,
 			TokenType: enum.TokenTypeEmailVerification,
@@ -216,7 +285,7 @@ func (s *AuthService) ResendVerification(ctx context.Context, meta *domain.Audit
 			ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
 		}
 
-		if err := s.tokenRepo.WithTx(tx).Create(ctx, verifyToken); err != nil {
+		if err := s.tokenRepo.Create(ctx, verifyToken); err != nil {
 			return err
 		}
 
@@ -226,7 +295,8 @@ func (s *AuthService) ResendVerification(ctx context.Context, meta *domain.Audit
 			return ErrSendVerificationEmail
 		}
 
-		return s.auditLogger.WithTx(tx).Log(ctx, meta, enum.ActionResendVerification, user, user)
+		actor := domain.MapUserToAuditUser(user)
+		return s.auditLogger.Log(ctx, meta, enum.ActionResendVerification, actor, actor)
 	})
 
 	if err != nil {
@@ -258,10 +328,10 @@ func (s *AuthService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta
 		return err
 	}
 
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 
 		// revoke old token
-		if err := s.tokenRepo.WithTx(tx).
+		if err := s.tokenRepo.
 			RevokeByUserAndType(ctx, user.ID, enum.TokenTypePasswordReset); err != nil {
 			return err
 		}
@@ -274,12 +344,12 @@ func (s *AuthService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta
 			ExpiresAt: time.Now().UTC().Add(1 * time.Hour),
 		}
 
-		if err := s.tokenRepo.WithTx(tx).Create(ctx, resetToken); err != nil {
+		if err := s.tokenRepo.Create(ctx, resetToken); err != nil {
 			return err
 		}
-
-		return s.auditLogger.WithTx(tx).
-			Log(ctx, meta, enum.ActionForgotPassword, user, user)
+		actor := domain.MapUserToAuditUser(user)
+		return s.auditLogger.
+			Log(ctx, meta, enum.ActionForgotPassword, actor, actor)
 	})
 
 	if err != nil {
@@ -295,20 +365,6 @@ func (s *AuthService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta
 	}
 
 	return nil
-}
-
-func isEmail(s string) bool {
-	_, err := mail.ParseAddress(s)
-	return err == nil
-}
-
-func generateHashToken() (string, string, error) {
-	rawToken, err := token.GenerateSecureToken(32)
-	if err != nil {
-		return "", "", ErrInternalServer
-	}
-	tokenHash := token.HashToken(rawToken)
-	return tokenHash, rawToken, nil
 }
 
 func (s *AuthService) SetPassword(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error {
@@ -362,19 +418,19 @@ func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.Aud
 	}
 	hashStr := string(hash)
 
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		switch tokenType {
 		case enum.TokenTypePasswordSet:
-			if err := s.userRepo.WithTx(tx).UpdatePassword(ctx, user.ID, hashStr); err != nil {
+			if err := s.userRepo.UpdatePassword(ctx, user.ID, hashStr); err != nil {
 				return err
 			}
 
-			if err := s.userRepo.WithTx(tx).MarkEmailVerified(ctx, user.ID); err != nil {
+			if err := s.userRepo.MarkEmailVerified(ctx, user.ID); err != nil {
 				return err
 			}
 
 		case enum.TokenTypePasswordReset:
-			if err := s.userRepo.WithTx(tx).UpdatePassword(ctx, user.ID, hashStr); err != nil {
+			if err := s.userRepo.UpdatePassword(ctx, user.ID, hashStr); err != nil {
 				return err
 			}
 
@@ -382,7 +438,7 @@ func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.Aud
 			return ErrInvalidInput
 		}
 
-		if err := s.tokenRepo.WithTx(tx).MarkUsed(ctx, found.ID); err != nil {
+		if err := s.tokenRepo.MarkUsed(ctx, found.ID); err != nil {
 			return err
 		}
 
@@ -391,7 +447,8 @@ func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.Aud
 			action = enum.ActionSetPassword
 		}
 
-		return s.auditLogger.WithTx(tx).Log(ctx, meta, action, user, user)
+		actor := domain.MapUserToAuditUser(user)
+		return s.auditLogger.Log(ctx, meta, action, actor, actor)
 	})
 	if err != nil {
 		if errors.Is(err, ErrPasswordAlreadySet) || errors.Is(err, ErrInvalidInput) {
@@ -401,4 +458,112 @@ func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.Aud
 	}
 
 	return nil
+}
+
+func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refreshToken string) (*domain.RefreshResult, error) {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, ErrInvalidInput
+	}
+	refreshTokenHash := token.HashToken(refreshToken)
+	session, err := s.sessionRepo.FindActiveByRefreshTokenHash(ctx, refreshTokenHash)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	user, err := s.userRepo.FindByID(ctx, session.UserID)
+	if err != nil || user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	if user.DeletedAt.Valid {
+		return nil, ErrAccountDeleted
+	}
+
+	if user.EmailVerifiedAt == nil {
+		return nil, ErrAccountNotVerified
+	}
+
+	now := time.Now()
+
+	newRefreshTokenHash, newRefreshToken, err := generateHashToken()
+	if err != nil {
+		return nil, err
+	}
+	newRefreshExpiresAt := now.Add(s.refreshTTL)
+
+	err = s.sessionRepo.RotateRefreshToken(ctx, domain.RefreshInput{
+		SessionID:    session.ID,
+		NewTokenHash: newRefreshTokenHash,
+		NewExpiresAt: newRefreshExpiresAt,
+		RotatedAt:    now,
+	})
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	accessToken, err := s.tokenManager.GenerateAccessToken(
+		user.ID,
+		session.ID,
+		user.Role.ID,
+		string(user.Role.Code),
+		user.Email,
+		user.Username,
+	)
+	if err != nil {
+		return nil, ErrInternalServer
+	}
+
+	return &domain.RefreshResult{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		ExpiresIn:    s.tokenManager.ExpiresInSeconds(),
+	}, nil
+
+}
+
+func (s *AuthService) Logout(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, sessionID uuid.UUID) error {
+	if actor == nil {
+		return ErrUnauthorized
+	}
+
+	if sessionID == uuid.Nil {
+		return ErrInvalidInput
+	}
+
+	if err := s.sessionRepo.RevokeByID(ctx, sessionID); err != nil {
+		return ErrInternalServer
+	}
+
+	return nil
+}
+
+func (s *AuthService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser) error {
+	if actor == nil {
+		return ErrUnauthorized
+	}
+
+	if actor.ID == uuid.Nil {
+		return ErrInvalidInput
+	}
+
+	if err := s.sessionRepo.RevokeAllByUserID(ctx, actor.ID); err != nil {
+		return ErrInternalServer
+	}
+
+	return nil
+}
+
+func isEmail(s string) bool {
+	_, err := mail.ParseAddress(s)
+	return err == nil
+}
+
+func generateHashToken() (string, string, error) {
+	rawToken, err := token.GenerateSecureToken(32)
+	if err != nil {
+		return "", "", ErrInternalServer
+	}
+	tokenHash := token.HashToken(rawToken)
+	return tokenHash, rawToken, nil
 }

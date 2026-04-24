@@ -6,6 +6,7 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/dto"
+	"portal-system/internal/http/reqctx"
 	"portal-system/internal/services"
 	"time"
 
@@ -61,13 +62,13 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		Email:          query.Email,
 		FullName:       query.FullName,
 		Dob:            dob,
-		Role:           enum.UserRole(query.Role),
+		RoleCode:       query.RoleCode,
 		Status:         enum.UserStatus(query.Status),
 		IncludeDeleted: includeDeleted,
 	}
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -117,7 +118,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	actor, err := getActorFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -125,14 +126,14 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	input := domain.CreateUserInput{
 		Email:     req.Email,
 		Username:  req.Username,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		Role:      req.Role,
+		RoleCode:  req.RoleCode,
 	}
 	if req.DOB != nil {
 		input.DOB = &req.DOB.Time
@@ -177,7 +178,7 @@ func (h *AdminHandler) GetUserDetail(c *gin.Context) {
 		return
 	}
 
-	actor, err := getActorFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -185,7 +186,7 @@ func (h *AdminHandler) GetUserDetail(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
 
 	user, err := h.userSvc.GetProfile(c.Request.Context(), meta, actor, userID)
 
@@ -243,8 +244,8 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		DOB:       dob,
 	}
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -291,8 +292,8 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -335,8 +336,8 @@ func (h *AdminHandler) RestoreUser(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -392,8 +393,8 @@ func (h *AdminHandler) UpdateRole(c *gin.Context) {
 		return
 	}
 
-	meta := getAuditMetaFromGin(c)
-	actor, err := getActorFromGin(c)
+	meta := reqctx.GetAuditMetaFromGin(c)
+	actor, err := reqctx.GetActorFromGin(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "unauthorized",
@@ -401,7 +402,7 @@ func (h *AdminHandler) UpdateRole(c *gin.Context) {
 		return
 	}
 
-	user, err := h.adminSvc.UpdateRole(c.Request.Context(), meta, actor, userID, req.Role)
+	user, err := h.adminSvc.UpdateRole(c.Request.Context(), meta, actor, userID, req.RoleCode)
 
 	if err != nil {
 		switch {
