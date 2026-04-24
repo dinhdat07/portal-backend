@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package portal.admin.v1;
+
+option go_package = "portal-system/gen/go/admin/v1;adminv1";
+
+import "google/api/annotations.proto";
+import "common/v1/common.proto";
+
+service AdminService {
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/admin/users"
+    };
+  }
+
+  rpc CreateUser(CreateUserRequest) returns (portal.common.v1.User) {
+    option (google.api.http) = {
+      post: "/api/v1/admin/users"
+      body: "*"
+    };
+  }
+
+  rpc GetUserDetail(GetUserDetailRequest) returns (portal.common.v1.User) {
+    option (google.api.http) = {
+      get: "/api/v1/admin/users/{user_id}"
+    };
+  }
+
+  rpc UpdateUser(UpdateUserRequest) returns (portal.common.v1.User) {
+    option (google.api.http) = {
+      put: "/api/v1/admin/users/{user_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteUser(DeleteUserRequest) returns (portal.common.v1.User) {
+    option (google.api.http) = {
+      delete: "/api/v1/admin/users/{user_id}/delete"
+    };
+  }
+
+  rpc RestoreUser(RestoreUserRequest) returns (portal.common.v1.User) {
+    option (google.api.http) = {
+      put: "/api/v1/admin/users/{user_id}/restore"
+      body: "*"
+    };
+  }
+
+  rpc UpdateUserRole(UpdateUserRoleRequest) returns (portal.common.v1.User) {
+    option (google.api.http) = {
+      put: "/api/v1/admin/users/{user_id}/role"
+      body: "*"
+    };
+  }
+}
+
+message ListUsersRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string username = 3;
+  optional string email = 4;
+  optional string full_name = 5;
+  optional string dob = 6;
+  optional portal.common.v1.RoleCode role = 7;
+  optional portal.common.v1.UserStatus status = 8;
+  bool include_deleted = 9;
+}
+
+message ListUsersResponse {
+  repeated portal.common.v1.User data = 1;
+  portal.common.v1.PaginationMeta meta = 2;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string username = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string dob = 5;
+  portal.common.v1.RoleCode role = 6;
+}
+
+message GetUserDetailRequest {
+  string user_id = 1;
+}
+
+message UpdateUserRequest {
+  string user_id = 1;
+  optional string first_name = 2;
+  optional string last_name = 3;
+  optional string username = 4;
+  optional string dob = 5;
+}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message RestoreUserRequest {
+  string user_id = 1;
+}
+
+message UpdateUserRoleRequest {
+  string user_id = 1;
+  portal.common.v1.RoleCode role = 2;
+}

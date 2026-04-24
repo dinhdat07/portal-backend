@@ -2,8 +2,10 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -25,6 +27,9 @@ func (r *GormRoleRepository) FindByCode(ctx context.Context, code constants.Role
 		First(&role).Error
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -35,6 +40,9 @@ func (r *GormRoleRepository) FindByID(ctx context.Context, id uuid.UUID) (*model
 	var role models.Role
 
 	if err := r.getDB(ctx).Where("id = ?", id).First(&role).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -46,6 +54,9 @@ func (r *GormRoleRepository) List(ctx context.Context) ([]models.Role, error) {
 
 	err := r.getDB(ctx).Preload("Permissions").Order("name ASC").Find(&roles).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 

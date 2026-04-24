@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package portal.common.v1;
+
+option go_package = "portal-system/gen/go/common/v1;commonv1";
+
+import "google/protobuf/timestamp.proto";
+
+enum RoleCode {
+  ROLE_CODE_UNSPECIFIED = 0;
+  ROLE_CODE_USER = 1;
+  ROLE_CODE_ADMIN = 2;
+}
+
+enum UserStatus {
+  USER_STATUS_UNSPECIFIED = 0;
+  USER_STATUS_PENDING_VERIFICATION = 1;
+  USER_STATUS_ACTIVE = 2;
+  USER_STATUS_DELETED = 3;
+}
+
+message MessageResponse {
+  string message = 1;
+}
+
+message PaginationMeta {
+  int32 page = 1;
+  int32 page_size = 2;
+  int64 total = 3;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string username = 3;
+  string first_name = 4;
+  string last_name = 5;
+  optional string dob = 6;
+  RoleCode role = 7;
+  UserStatus status = 8;
+  optional google.protobuf.Timestamp email_verified_at = 9;
+  optional google.protobuf.Timestamp last_login_at = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  optional google.protobuf.Timestamp deleted_at = 13;
+  optional string deleted_by = 14;
+  optional google.protobuf.Timestamp restored_at = 15;
+  optional string restored_by = 16;
+}

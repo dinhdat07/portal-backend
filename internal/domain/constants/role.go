@@ -3,8 +3,8 @@ package constants
 type RoleCode string
 
 const (
-	RoleCodeUser  RoleCode = "user"
-	RoleCodeAdmin RoleCode = "admin"
+	RoleCodeUser  RoleCode = "ROLE_CODE_USER"
+	RoleCodeAdmin RoleCode = "ROLE_CODE_ADMIN"
 )
 
 func (r RoleCode) IsValid() bool {

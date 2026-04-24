@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html"
+	appLogger "log"
 	"net"
 	"net/smtp"
 	"portal-system/internal/config"
@@ -156,7 +157,11 @@ func (s *SMTPEmailService) send(ctx context.Context, to, subject, textBody, html
 		_ = conn.Close()
 		return fmt.Errorf("create smtp client: %w", err)
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			appLogger.Println("failed to close smtp client connection", "error", err)
+		}
+	}()
 
 	if s.cfg.UseTLS {
 		tlsConfig := &tls.Config{

@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package portal.auth.v1;
+
+option go_package = "portal-system/gen/go/auth/v1;authv1";
+
+import "google/api/annotations.proto";
+import "common/v1/common.proto";
+
+service AuthService {
+  rpc Register(RegisterRequest) returns (portal.common.v1.MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/register"
+      body: "*"
+    };
+  }
+
+  rpc VerifyEmail(VerifyEmailRequest) returns (portal.common.v1.MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/verify-email"
+      body: "*"
+    };
+  }
+
+  rpc ResendVerification(ResendVerificationRequest) returns (portal.common.v1.MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/resend-verification"
+      body: "*"
+    };
+  }
+
+  rpc SetPassword(SetPasswordRequest) returns (portal.common.v1.MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/set-password"
+      body: "*"
+    };
+  }
+
+  rpc ResetPassword(SetPasswordRequest) returns (portal.common.v1.MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/reset-password"
+      body: "*"
+    };
+  }
+
+  rpc ForgotPassword(ForgotPasswordRequest) returns (portal.common.v1.MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/forgot-password"
+      body: "*"
+    };
+  }
+
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/login"
+      body: "*"
+    };
+  }
+
+  rpc RefreshToken(RefreshRequest) returns (RefreshResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/refresh"
+      body: "*"
+    };
+  }
+
+  rpc Logout(LogoutRequest) returns (portal.common.v1.MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/logout"
+      body: "*"
+    };
+  }
+
+  rpc LogoutAll(LogoutAllRequest) returns (portal.common.v1.MessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/logout-all"
+      body: "*"
+    };
+  }
+}
+
+message RegisterRequest {
+  string email = 1;
+  string username = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string password = 5;
+  string dob = 6;
+}
+
+message VerifyEmailRequest {
+  string token = 1;
+}
+
+message ResendVerificationRequest {
+  string email = 1;
+}
+
+message SetPasswordRequest {
+  string token = 1;
+  string password = 2;
+  string confirm_password = 3;
+}
+
+message ForgotPasswordRequest {
+  string email = 1;
+}
+
+message LoginRequest {
+  string identifier = 1;
+  string password = 2;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message LogoutRequest {}
+
+message LogoutAllRequest {}
+
+message RefreshResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  string token_type = 3;
+  int64 expires_in = 4;
+}
+
+message LoginResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  string token_type = 3;
+  int64 expires_in = 4;
+  portal.common.v1.User user = 5;
+}
