@@ -9,6 +9,7 @@ import (
 	repositoriesmocks "portal-system/internal/mocks/repositories"
 	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 	. "portal-system/internal/services"
 	"testing"
 	"time"
@@ -16,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 func TestUserService_UpdateProfile_Table(t *testing.T) {
@@ -62,7 +62,7 @@ func TestUserService_UpdateProfile_Table(t *testing.T) {
 			name:        "user not found",
 			actor:       &domain.AuditUser{ID: userID, RoleCode: constants.RoleCodeUser},
 			input:       domain.UpdateUserInput{},
-			findByIDErr: gorm.ErrRecordNotFound,
+			findByIDErr: repositories.ErrNotFound,
 			expectedErr: ErrUserNotFound,
 		},
 		{
@@ -242,7 +242,7 @@ func TestUserService_UpdateProfile_Table(t *testing.T) {
 
 func TestUserService_GetProfile_UserNotFound(t *testing.T) {
 	userRepo := repositoriesmocks.NewUserRepository(t)
-	userRepo.EXPECT().FindByID(mock.Anything, mock.Anything).Return(nil, gorm.ErrRecordNotFound)
+	userRepo.EXPECT().FindByID(mock.Anything, mock.Anything).Return(nil, repositories.ErrNotFound)
 	roleRepo := repositoriesmocks.NewRoleRepository(t)
 	tx := repositoriesmocks.NewTxManager(t)
 	auditLogger := servicesmocks.NewAuditLogger(t)
@@ -332,7 +332,7 @@ func TestUserService_ChangePassword_Table(t *testing.T) {
 			currentPassword: "current-pass",
 			newPassword:     "new-pass-123",
 			confirmPassword: "new-pass-123",
-			findByIDErr:     gorm.ErrRecordNotFound,
+			findByIDErr:     repositories.ErrNotFound,
 			expectedErr:     ErrUnauthorized,
 		},
 		{

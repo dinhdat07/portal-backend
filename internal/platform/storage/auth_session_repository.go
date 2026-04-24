@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,6 +33,9 @@ func (r *GormAuthSessionRepository) FindActiveByRefreshTokenHash(ctx context.Con
 		First(&AuthSession).Error
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -47,6 +52,9 @@ func (r *GormAuthSessionRepository) FindActiveByID(ctx context.Context, id uuid.
 		First(&AuthSession).Error
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -67,7 +75,7 @@ func (r *GormAuthSessionRepository) RevokeByID(ctx context.Context, sessionID uu
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil
@@ -88,7 +96,7 @@ func (r *GormAuthSessionRepository) RevokeAllByUserID(ctx context.Context, userI
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil

@@ -205,7 +205,7 @@ func (svc *adminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 func (svc *adminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrUserNotFound
 		}
 		return nil, err
@@ -247,7 +247,7 @@ func (svc *adminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta,
 func (svc *adminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByIDUnscoped(ctx, userID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrUserNotFound
 		}
 		return nil, err
@@ -288,7 +288,7 @@ func (svc *adminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta,
 
 	user, err := svc.userRepo.FindByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrUserNotFound
 		}
 		return nil, err

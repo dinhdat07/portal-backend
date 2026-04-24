@@ -9,6 +9,7 @@ import (
 	repositoriesmocks "portal-system/internal/mocks/repositories"
 	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 	. "portal-system/internal/services"
 	"testing"
 	"time"
@@ -167,13 +168,13 @@ func TestAuthService_LogIn_Table(t *testing.T) {
 				if tc.identifier == "john@example.com" {
 					return cloneUser(tc.user), tc.findErr
 				}
-				return nil, gorm.ErrRecordNotFound
+				return nil, repositories.ErrNotFound
 			}).Maybe()
 			userRepo.EXPECT().FindByUsername(mock.Anything, "john").RunAndReturn(func(ctx context.Context, username string) (*models.User, error) {
 				if tc.identifier != "john@example.com" {
 					return cloneUser(tc.user), tc.findErr
 				}
-				return nil, gorm.ErrRecordNotFound
+				return nil, repositories.ErrNotFound
 			}).Maybe()
 			sessionRepo := repositoriesmocks.NewAuthSessionRepository(t)
 			sessionRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, session *models.AuthSession) error {

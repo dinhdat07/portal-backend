@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type UserService interface {
@@ -48,7 +47,7 @@ func NewUserService(deps UserServiceDeps) *userService {
 func (svc *userService) GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrUserNotFound
 		}
 		return nil, err
@@ -67,7 +66,7 @@ func (svc *userService) GetProfile(ctx context.Context, meta *domain.AuditMeta, 
 func (svc *userService) ChangePassword(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, current, newPassword, confirm string) error {
 	user, err := svc.userRepo.FindByID(ctx, actor.ID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return ErrUnauthorized
 		}
 		return err
@@ -118,7 +117,7 @@ func (svc *userService) ChangePassword(ctx context.Context, meta *domain.AuditMe
 func (svc *userService) UpdateProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, input domain.UpdateUserInput) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrUserNotFound
 		}
 		return nil, err

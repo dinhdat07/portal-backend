@@ -2,10 +2,12 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -35,6 +37,9 @@ func (r *GormUserTokenRepository) FindValidToken(ctx context.Context, tokenHash 
 		Where("expires_at > ?", time.Now().UTC()).
 		First(&token).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -55,7 +60,7 @@ func (r *GormUserTokenRepository) MarkUsed(ctx context.Context, id uuid.UUID) er
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil
@@ -75,7 +80,7 @@ func (r *GormUserTokenRepository) Revoke(ctx context.Context, id uuid.UUID) erro
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil

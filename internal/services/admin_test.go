@@ -9,6 +9,7 @@ import (
 	repositoriesmocks "portal-system/internal/mocks/repositories"
 	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 	. "portal-system/internal/services"
 	"testing"
 	"time"
@@ -314,7 +315,7 @@ func TestAdminService_DeleteUser_Table(t *testing.T) {
 		expectTx    bool
 		expectAudit bool
 	}{
-		{name: "user not found", findErr: gorm.ErrRecordNotFound, expected: ErrUserNotFound},
+		{name: "user not found", findErr: repositories.ErrNotFound, expected: ErrUserNotFound},
 		{name: "role repo error", user: cloneUser(baseUser), roleErr: errors.New("role failed"), expected: ErrInternalServer},
 		{
 			name:     "forbidden delete other admin",
@@ -409,7 +410,7 @@ func TestAdminService_RestoreUser_Table(t *testing.T) {
 		expectTx    bool
 		expectAudit bool
 	}{
-		{name: "user not found", findErr: gorm.ErrRecordNotFound, expected: ErrUserNotFound},
+		{name: "user not found", findErr: repositories.ErrNotFound, expected: ErrUserNotFound},
 		{name: "user not deleted", user: &models.User{ID: userID, DeletedAt: gorm.DeletedAt{}}, expected: ErrUserNotDeleted},
 		{
 			name:       "restore repository error",
@@ -499,7 +500,7 @@ func TestAdminService_UpdateRole_Table(t *testing.T) {
 		sameRole      bool
 	}{
 		{name: "empty role code", roleCode: "", expected: ErrInvalidInput},
-		{name: "user not found", roleCode: constants.RoleCodeUser, findErr: gorm.ErrRecordNotFound, expected: ErrUserNotFound},
+		{name: "user not found", roleCode: constants.RoleCodeUser, findErr: repositories.ErrNotFound, expected: ErrUserNotFound},
 		{
 			name:     "target role lookup error",
 			roleCode: constants.RoleCodeUser,

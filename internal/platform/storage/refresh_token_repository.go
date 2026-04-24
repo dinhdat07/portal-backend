@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +28,9 @@ func (r *GormRefreshTokenRepository) FindByTokenHash(ctx context.Context, tokenH
 
 	err := r.getDB(ctx).Where("token_hash = ?", tokenHash).First(&token).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 	return &token, nil
@@ -45,7 +50,7 @@ func (r *GormRefreshTokenRepository) RevokeByID(ctx context.Context, id uuid.UUI
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil
@@ -65,7 +70,7 @@ func (r *GormRefreshTokenRepository) RevokeByUserID(ctx context.Context, userID 
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil
@@ -85,7 +90,7 @@ func (r *GormRefreshTokenRepository) RevokeBySessionID(ctx context.Context, user
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil
@@ -102,7 +107,7 @@ func (r *GormRefreshTokenRepository) MarkReplacement(ctx context.Context, id uui
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil

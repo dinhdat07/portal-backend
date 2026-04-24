@@ -18,7 +18,6 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type AuthService interface {
@@ -87,7 +86,7 @@ func NewAuthService(deps AuthServiceDeps) *authService {
 
 func (s *authService) Register(ctx context.Context, meta *domain.AuditMeta, email, username, password, firstName, lastName string, dob time.Time) error {
 	existing, err := s.userRepo.FindByEmail(ctx, email)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err != nil {
 		return err
 	}
 
@@ -96,7 +95,7 @@ func (s *authService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 	}
 
 	existing, err = s.userRepo.FindByUsername(ctx, username)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err != nil {
 		return err
 	}
 
@@ -619,11 +618,11 @@ func (s *authService) handleRefreshTokenReuse(ctx context.Context, meta *domain.
 	}
 
 	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.sessionRepo.RevokeAllByUserID(txCtx, reused.UserID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := s.sessionRepo.RevokeAllByUserID(txCtx, reused.UserID); err != nil && !errors.Is(err, repositories.ErrNotFound) {
 			return err
 		}
 
-		if err := s.refreshRepo.RevokeByUserID(txCtx, reused.UserID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := s.refreshRepo.RevokeByUserID(txCtx, reused.UserID); err != nil && !errors.Is(err, repositories.ErrNotFound) {
 			return err
 		}
 
@@ -668,7 +667,7 @@ func (s *authService) Logout(ctx context.Context, meta *domain.AuditMeta, actor 
 	}
 
 	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.sessionRepo.RevokeByID(txCtx, sessionID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := s.sessionRepo.RevokeByID(txCtx, sessionID); err != nil && !errors.Is(err, repositories.ErrNotFound) {
 			return err
 		}
 
@@ -708,7 +707,7 @@ func (s *authService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, act
 	}
 
 	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.sessionRepo.RevokeAllByUserID(txCtx, actor.ID); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := s.sessionRepo.RevokeAllByUserID(txCtx, actor.ID); err != nil && !errors.Is(err, repositories.ErrNotFound) {
 			return err
 		}
 

@@ -8,6 +8,7 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -29,6 +30,9 @@ func (r *GormUserRepository) FindByID(ctx context.Context, id uuid.UUID) (*model
 	var user models.User
 	err := r.getDB(ctx).Preload("Role").First(&user, "id = ?", id).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 	return &user, nil
@@ -38,6 +42,9 @@ func (r *GormUserRepository) FindByIDUnscoped(ctx context.Context, id uuid.UUID)
 	var user models.User
 	err := r.getDB(ctx).Preload("Role").Unscoped().First(&user, "id = ?", id).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 	return &user, nil
@@ -88,44 +95,72 @@ func (r *GormUserRepository) Update(ctx context.Context, user *models.User) erro
 
 func (r *GormUserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
 	var user models.User
-	return r.getDB(ctx).
+	result := r.getDB(ctx).
 		Model(&user).
 		Where("id = ?", id).
-		Update("password_hash", passwordHash).Error
+		Update("password_hash", passwordHash)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return repositories.ErrNotFound
+	}
+	return nil
 }
 
 func (r *GormUserRepository) UpdateRole(ctx context.Context, id uuid.UUID, roleID uuid.UUID) error {
-	return r.getDB(ctx).
+	result := r.getDB(ctx).
 		Model(&models.User{}).
 		Where("id = ?", id).
-		Update("role_id", roleID).Error
+		Update("role_id", roleID)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return repositories.ErrNotFound
+	}
+	return nil
 }
 
 func (r *GormUserRepository) MarkEmailVerified(ctx context.Context, id uuid.UUID) error {
 	now := time.Now().UTC()
 
-	return r.getDB(ctx).
+	result := r.getDB(ctx).
 		Model(&models.User{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"email_verified_at": &now,
 			"status":            enum.StatusActive,
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return repositories.ErrNotFound
+	}
+	return nil
 }
 
 func (r *GormUserRepository) Delete(ctx context.Context, id uuid.UUID, deletedBy uuid.UUID) error {
-	return r.getDB(ctx).
+	result := r.getDB(ctx).
 		Model(&models.User{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"deleted_at": time.Now(),
 			"deleted_by": deletedBy,
 			"status":     enum.StatusDeleted,
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return repositories.ErrNotFound
+	}
+	return nil
 }
 
 func (r *GormUserRepository) Restore(ctx context.Context, id uuid.UUID) error {
-	return r.getDB(ctx).
+	result := r.getDB(ctx).
 		Model(&models.User{}).
 		Unscoped().
 		Where("id = ?", id).
@@ -133,7 +168,14 @@ func (r *GormUserRepository) Restore(ctx context.Context, id uuid.UUID) error {
 			"deleted_at": nil,
 			"deleted_by": nil,
 			"status":     enum.StatusActive,
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return repositories.ErrNotFound
+	}
+	return nil
 }
 
 func (r *GormUserRepository) ListUsers(ctx context.Context, filter domain.UsersFilter) ([]models.User, int64, error) {
