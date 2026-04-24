@@ -6,11 +6,13 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
+	repositoriesmocks "portal-system/internal/mocks/repositories"
 	"portal-system/internal/models"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -157,36 +159,40 @@ func TestUserService_UpdateProfile_Table(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			adminRole := &models.Role{ID: adminRoleID, Code: constants.RoleCodeAdmin}
-			auditRepo := &auditRepoMock{createFn: func(ctx context.Context, log *models.AuditLog) error {
+			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
+			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
 				if tc.expectAction != "" && log.Action != tc.expectAction {
 					t.Fatalf("expected audit action %s, got %s", tc.expectAction, log.Action)
 				}
 				return tc.auditErr
-			}}
-			userRepo := &userRepoMock{
-				findByIDFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-					if tc.findByIDErr != nil {
-						return nil, tc.findByIDErr
-					}
-					return cloneUser(tc.foundUser), nil
-				},
-				findByUsernameFn: func(ctx context.Context, username string) (*models.User, error) {
-					if tc.findUsernameErr != nil {
-						return nil, tc.findUsernameErr
-					}
-					return tc.duplicateUser, nil
-				},
-				updateFn: func(ctx context.Context, user *models.User) error {
-					return tc.updateErr
-				},
-			}
-			roleRepo := &roleRepoMock{findByCodeFn: func(ctx context.Context, code constants.RoleCode) (*models.Role, error) {
+			}).Maybe()
+			userRepo := repositoriesmocks.NewUserRepository(t)
+			userRepo.EXPECT().FindByID(mock.Anything, userID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (*models.User, error) {
+				if tc.findByIDErr != nil {
+					return nil, tc.findByIDErr
+				}
+				return cloneUser(tc.foundUser), nil
+			})
+			userRepo.EXPECT().FindByUsername(mock.Anything, newUsername).RunAndReturn(func(ctx context.Context, username string) (*models.User, error) {
+				if tc.findUsernameErr != nil {
+					return nil, tc.findUsernameErr
+				}
+				return tc.duplicateUser, nil
+			}).Maybe()
+			userRepo.EXPECT().Update(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, user *models.User) error {
+				return tc.updateErr
+			}).Maybe()
+			roleRepo := repositoriesmocks.NewRoleRepository(t)
+			roleRepo.EXPECT().FindByCode(mock.Anything, constants.RoleCodeAdmin).RunAndReturn(func(ctx context.Context, code constants.RoleCode) (*models.Role, error) {
 				if tc.roleFindErr != nil {
 					return nil, tc.roleFindErr
 				}
 				return adminRole, nil
-			}}
-			tx := &txManagerMock{}
+			}).Maybe()
+			tx := repositoriesmocks.NewTxManager(t)
+			tx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(ctx context.Context) error) error {
+				return fn(ctx)
+			}).Maybe()
 			svc := NewUserService(UserServiceDeps{
 				TxManager:   tx,
 				AuditLogger: NewAuditLogService(auditRepo),
@@ -213,36 +219,36 @@ func TestUserService_UpdateProfile_Table(t *testing.T) {
 				}
 			}
 
-			if tc.expectTx && tx.withTxCallCount == 0 {
-				t.Fatal("expected transaction to be used")
+			if tc.expectTx {
+				tx.AssertNumberOfCalls(t, "WithTx", 1)
+			} else {
+				tx.AssertNotCalled(t, "WithTx", mock.Anything, mock.Anything)
 			}
-			if !tc.expectTx && tx.withTxCallCount != 0 {
-				t.Fatal("did not expect transaction")
+			if tc.expectUpdate {
+				userRepo.AssertNumberOfCalls(t, "Update", 1)
+			} else {
+				userRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 			}
-			if tc.expectUpdate && userRepo.updateCalled == 0 {
-				t.Fatal("expected update call")
-			}
-			if !tc.expectUpdate && userRepo.updateCalled != 0 {
-				t.Fatal("did not expect update call")
-			}
-			if tc.expectAudit && auditRepo.createInvoked == 0 {
-				t.Fatal("expected audit call")
-			}
-			if !tc.expectAudit && auditRepo.createInvoked != 0 {
-				t.Fatal("did not expect audit call")
+			if tc.expectAudit {
+				auditRepo.AssertNumberOfCalls(t, "Create", 1)
+			} else {
+				auditRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 			}
 		})
 	}
 }
 
 func TestUserService_GetProfile_UserNotFound(t *testing.T) {
+	userRepo := repositoriesmocks.NewUserRepository(t)
+	userRepo.EXPECT().FindByID(mock.Anything, mock.Anything).Return(nil, gorm.ErrRecordNotFound)
+	roleRepo := repositoriesmocks.NewRoleRepository(t)
+	tx := repositoriesmocks.NewTxManager(t)
+	auditRepo := repositoriesmocks.NewAuditLogRepository(t)
 	svc := NewUserService(UserServiceDeps{
-		UserRepo: &userRepoMock{findByIDFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-			return nil, gorm.ErrRecordNotFound
-		}},
-		RoleRepo:    &roleRepoMock{},
-		TxManager:   &txManagerMock{},
-		AuditLogger: NewAuditLogService(&auditRepoMock{}),
+		UserRepo:    userRepo,
+		RoleRepo:    roleRepo,
+		TxManager:   tx,
+		AuditLogger: NewAuditLogService(auditRepo),
 	})
 
 	actor := &domain.AuditUser{ID: uuid.New(), RoleCode: constants.RoleCodeUser}
@@ -254,21 +260,28 @@ func TestUserService_GetProfile_UserNotFound(t *testing.T) {
 }
 
 func TestUserService_GetProfile_AdminWritesAuditLog(t *testing.T) {
-	auditRepo := &auditRepoMock{}
+	auditRepo := repositoriesmocks.NewAuditLogRepository(t)
 	userID := uuid.New()
+	var capturedLog *models.AuditLog
+	userRepo := repositoriesmocks.NewUserRepository(t)
+	userRepo.EXPECT().FindByID(mock.Anything, userID).Return(&models.User{
+		ID:       userID,
+		Username: "target",
+		Email:    "target@example.com",
+		Role: models.Role{
+			Code: constants.RoleCodeUser,
+		},
+	}, nil)
+	auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
+		capturedLog = log
+		return nil
+	}).Once()
+	roleRepo := repositoriesmocks.NewRoleRepository(t)
+	tx := repositoriesmocks.NewTxManager(t)
 	svc := NewUserService(UserServiceDeps{
-		UserRepo: &userRepoMock{findByIDFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-			return &models.User{
-				ID:       userID,
-				Username: "target",
-				Email:    "target@example.com",
-				Role: models.Role{
-					Code: constants.RoleCodeUser,
-				},
-			}, nil
-		}},
-		RoleRepo:    &roleRepoMock{},
-		TxManager:   &txManagerMock{},
+		UserRepo:    userRepo,
+		RoleRepo:    roleRepo,
+		TxManager:   tx,
 		AuditLogger: NewAuditLogService(auditRepo),
 	})
 
@@ -281,11 +294,14 @@ func TestUserService_GetProfile_AdminWritesAuditLog(t *testing.T) {
 	if user == nil || user.ID != userID {
 		t.Fatalf("expected user with id %s", userID)
 	}
-	if auditRepo.createInvoked != 1 {
-		t.Fatalf("expected 1 audit log create call, got %d", auditRepo.createInvoked)
+	if !auditRepo.AssertNumberOfCalls(t, "Create", 1) {
+		t.Fatal("expected exactly one audit log create call")
 	}
-	if got := auditRepo.createdLogs[0].Action; got != enum.ActionAdminViewUser {
-		t.Fatalf("expected action %s, got %s", enum.ActionAdminViewUser, got)
+	if capturedLog == nil {
+		t.Fatal("expected captured audit log")
+	}
+	if capturedLog.Action != enum.ActionAdminViewUser {
+		t.Fatalf("expected action %s, got %s", enum.ActionAdminViewUser, capturedLog.Action)
 	}
 }
 
@@ -397,31 +413,35 @@ func TestUserService_ChangePassword_Table(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			auditRepo := &auditRepoMock{createFn: func(ctx context.Context, log *models.AuditLog) error {
+			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
+			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
 				return tc.auditErr
-			}}
-			userRepo := &userRepoMock{
-				findByIDFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-					if tc.findByIDErr != nil {
-						return nil, tc.findByIDErr
-					}
-					return tc.user, nil
-				},
-				updatePasswordFn: func(ctx context.Context, id uuid.UUID, passwordHash string) error {
-					if id != actorID {
-						t.Fatalf("expected update password for actor id %s, got %s", actorID, id)
-					}
-					if passwordHash == "" {
-						t.Fatal("expected non-empty hashed password")
-					}
-					return tc.updatePasswordErr
-				},
-			}
-			txManager := &txManagerMock{}
+			}).Maybe()
+			userRepo := repositoriesmocks.NewUserRepository(t)
+			userRepo.EXPECT().FindByID(mock.Anything, actorID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (*models.User, error) {
+				if tc.findByIDErr != nil {
+					return nil, tc.findByIDErr
+				}
+				return tc.user, nil
+			})
+			userRepo.EXPECT().UpdatePassword(mock.Anything, actorID, mock.Anything).RunAndReturn(func(ctx context.Context, id uuid.UUID, passwordHash string) error {
+				if id != actorID {
+					t.Fatalf("expected update password for actor id %s, got %s", actorID, id)
+				}
+				if passwordHash == "" {
+					t.Fatal("expected non-empty hashed password")
+				}
+				return tc.updatePasswordErr
+			}).Maybe()
+			txManager := repositoriesmocks.NewTxManager(t)
+			txManager.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(ctx context.Context) error) error {
+				return fn(ctx)
+			}).Maybe()
+			roleRepo := repositoriesmocks.NewRoleRepository(t)
 			svc := NewUserService(UserServiceDeps{
 				TxManager:   txManager,
 				AuditLogger: NewAuditLogService(auditRepo),
-				RoleRepo:    &roleRepoMock{},
+				RoleRepo:    roleRepo,
 				UserRepo:    userRepo,
 			})
 
@@ -435,23 +455,20 @@ func TestUserService_ChangePassword_Table(t *testing.T) {
 				t.Fatalf("expected error %v, got %v", tc.expectedErr, err)
 			}
 
-			if tc.expectTx && txManager.withTxCallCount == 0 {
-				t.Fatal("expected transaction to be used")
+			if tc.expectTx {
+				txManager.AssertNumberOfCalls(t, "WithTx", 1)
+			} else {
+				txManager.AssertNotCalled(t, "WithTx", mock.Anything, mock.Anything)
 			}
-			if !tc.expectTx && txManager.withTxCallCount != 0 {
-				t.Fatal("did not expect transaction to be used")
+			if tc.expectUpdateCall {
+				userRepo.AssertNumberOfCalls(t, "UpdatePassword", 1)
+			} else {
+				userRepo.AssertNotCalled(t, "UpdatePassword", mock.Anything, mock.Anything, mock.Anything)
 			}
-			if tc.expectUpdateCall && userRepo.updatePasswordCalled == 0 {
-				t.Fatal("expected update password repository call")
-			}
-			if !tc.expectUpdateCall && userRepo.updatePasswordCalled != 0 {
-				t.Fatal("did not expect update password repository call")
-			}
-			if tc.expectAuditCall && auditRepo.createInvoked == 0 {
-				t.Fatal("expected audit log create call")
-			}
-			if !tc.expectAuditCall && auditRepo.createInvoked != 0 {
-				t.Fatal("did not expect audit log create call")
+			if tc.expectAuditCall {
+				auditRepo.AssertNumberOfCalls(t, "Create", 1)
+			} else {
+				auditRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 			}
 		})
 	}

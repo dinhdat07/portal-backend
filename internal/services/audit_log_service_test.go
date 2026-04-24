@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"portal-system/internal/domain"
+	repositoriesmocks "portal-system/internal/mocks/repositories"
 	"portal-system/internal/models"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/mock"
 )
 
 func TestAuditLogService_List_Table(t *testing.T) {
@@ -57,28 +60,28 @@ func TestAuditLogService_List_Table(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var captured domain.AuditLogFilter
-			repo := &auditRepoMock{
-				listFn: func(ctx context.Context, filter domain.AuditLogFilter) ([]models.AuditLog, int64, error) {
-					captured = filter
-					return tc.listLogs, tc.listTotal, tc.listErr
-				},
-			}
+			repo := repositoriesmocks.NewAuditLogRepository(t)
+			repo.EXPECT().List(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, filter domain.AuditLogFilter) ([]models.AuditLog, int64, error) {
+				captured = filter
+				return tc.listLogs, tc.listTotal, tc.listErr
+			}).Maybe()
 			svc := NewAuditLogService(repo)
 
 			logs, total, err := svc.List(context.Background(), tc.filter)
-			if tc.expected == nil {
+			switch {
+			case tc.expected == nil:
 				if err != nil {
 					t.Fatalf("expected nil error, got %v", err)
 				}
 				if len(logs) != len(tc.listLogs) || total != tc.listTotal {
 					t.Fatalf("unexpected list result logs=%d total=%d", len(logs), total)
 				}
-			} else if tc.expected == ErrInvalidTimeRange {
+			case tc.expected == ErrInvalidTimeRange:
 				if !errors.Is(err, tc.expected) {
 					t.Fatalf("expected ErrInvalidTimeRange, got %v", err)
 				}
 				return
-			} else if err == nil || err.Error() != tc.expected.Error() {
+			case err == nil || err.Error() != tc.expected.Error():
 				t.Fatalf("expected error %v, got %v", tc.expected, err)
 			}
 

@@ -4,94 +4,15 @@ import (
 	"context"
 	"errors"
 	"portal-system/internal/domain/constants"
+	repositoriesmocks "portal-system/internal/mocks/repositories"
+	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
 	"portal-system/internal/platform/token"
-	"portal-system/internal/repositories"
-	"portal-system/internal/services"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 )
-
-type roleRepoMock struct {
-	getWithPermissionsFn func(ctx context.Context, roleID uuid.UUID) (*models.Role, error)
-}
-
-func (m *roleRepoMock) FindByCode(ctx context.Context, code constants.RoleCode) (*models.Role, error) {
-	return nil, nil
-}
-
-func (m *roleRepoMock) FindByID(ctx context.Context, id uuid.UUID) (*models.Role, error) {
-	return nil, nil
-}
-
-func (m *roleRepoMock) List(ctx context.Context) ([]models.Role, error) {
-	return nil, nil
-}
-
-func (m *roleRepoMock) GetWithPermissions(ctx context.Context, roleID uuid.UUID) (*models.Role, error) {
-	if m.getWithPermissionsFn != nil {
-		return m.getWithPermissionsFn(ctx, roleID)
-	}
-	return nil, nil
-}
-
-func (m *roleRepoMock) AssignPermission(ctx context.Context, roleID uuid.UUID, permID uuid.UUID) error {
-	return nil
-}
-
-func (m *roleRepoMock) RemovePermission(ctx context.Context, roleID uuid.UUID, permID uuid.UUID) error {
-	return nil
-}
-
-var _ repositories.RoleRepository = (*roleRepoMock)(nil)
-
-type sessionRepoMock struct {
-	findActiveByIDFn func(ctx context.Context, id uuid.UUID) (*models.AuthSession, error)
-}
-
-func (m *sessionRepoMock) Create(ctx context.Context, session *models.AuthSession) error {
-	return nil
-}
-
-func (m *sessionRepoMock) FindActiveByID(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
-	if m.findActiveByIDFn != nil {
-		return m.findActiveByIDFn(ctx, id)
-	}
-	return nil, nil
-}
-
-func (m *sessionRepoMock) RevokeByID(ctx context.Context, sessionID uuid.UUID) error {
-	return nil
-}
-
-func (m *sessionRepoMock) RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error {
-	return nil
-}
-
-func (m *sessionRepoMock) ListActiveByUserID(ctx context.Context, userID uuid.UUID) ([]models.AuthSession, error) {
-	return nil, nil
-}
-
-var _ repositories.AuthSessionRepository = (*sessionRepoMock)(nil)
-
-type revocationStoreMock struct {
-	isRevokedFn func(ctx context.Context, sessionID uuid.UUID) (bool, error)
-}
-
-func (m *revocationStoreMock) MarkRevoked(ctx context.Context, sessionID uuid.UUID, expiresAt time.Time) error {
-	return nil
-}
-
-func (m *revocationStoreMock) IsRevoked(ctx context.Context, sessionID uuid.UUID) (bool, error) {
-	if m.isRevokedFn != nil {
-		return m.isRevokedFn(ctx, sessionID)
-	}
-	return false, nil
-}
-
-var _ services.SessionRevocationStore = (*revocationStoreMock)(nil)
 
 func TestAuthenticator_Authenticate_Table(t *testing.T) {
 	userID := uuid.New()
@@ -145,30 +66,28 @@ func TestAuthenticator_Authenticate_Table(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			authenticator := NewAuthenticator(
-				manager,
-				&roleRepoMock{
-					getWithPermissionsFn: func(ctx context.Context, id uuid.UUID) (*models.Role, error) {
-						if tc.roleErr != nil {
-							return nil, tc.roleErr
-						}
-						return role, nil
-					},
-				},
-				&sessionRepoMock{
-					findActiveByIDFn: func(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
-						if tc.sessionErr != nil {
-							return nil, tc.sessionErr
-						}
-						return tc.session, nil
-					},
-				},
-				&revocationStoreMock{
-					isRevokedFn: func(ctx context.Context, id uuid.UUID) (bool, error) {
-						return tc.revoked, tc.revokeErr
-					},
-				},
-			)
+			roleRepo := repositoriesmocks.NewRoleRepository(t)
+			roleRepo.EXPECT().GetWithPermissions(mock.Anything, roleID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (*models.Role, error) {
+				if tc.roleErr != nil {
+					return nil, tc.roleErr
+				}
+				return role, nil
+			}).Maybe()
+
+			sessionRepo := repositoriesmocks.NewAuthSessionRepository(t)
+			sessionRepo.EXPECT().FindActiveByID(mock.Anything, sessionID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
+				if tc.sessionErr != nil {
+					return nil, tc.sessionErr
+				}
+				return tc.session, nil
+			}).Maybe()
+
+			revoStore := servicesmocks.NewSessionRevocationStore(t)
+			revoStore.EXPECT().IsRevoked(mock.Anything, sessionID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (bool, error) {
+				return tc.revoked, tc.revokeErr
+			}).Maybe()
+
+			authenticator := NewAuthenticator(manager, roleRepo, sessionRepo, revoStore)
 
 			principal, err := authenticator.Authenticate(context.Background(), tc.tokenString)
 			if tc.expectedErr != "" {
