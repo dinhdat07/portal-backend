@@ -68,7 +68,7 @@ type AuthServiceDeps struct {
 	RefreshTTL      time.Duration
 }
 
-func NewAuthService(deps AuthServiceDeps) AuthService {
+func NewAuthService(deps AuthServiceDeps) *authService {
 	return &authService{
 		txManager:       deps.TxManager,
 		auditLogger:     deps.AuditLogger,

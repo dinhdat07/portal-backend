@@ -6,7 +6,6 @@ import (
 
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
-	"portal-system/internal/repositories"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -16,7 +15,7 @@ type GormUserTokenRepository struct {
 	db *gorm.DB
 }
 
-func NewGormUserTokenRepository(db *gorm.DB) repositories.UserTokenRepository {
+func NewGormUserTokenRepository(db *gorm.DB) *GormUserTokenRepository {
 	return &GormUserTokenRepository{db: db}
 }
 

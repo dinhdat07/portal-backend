@@ -1,4 +1,4 @@
-package app
+package bootstrap
 
 import (
 	"portal-system/internal/config"
@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func seedAdmin(db *gorm.DB, cfg *config.Config) error {
+func SeedAdmin(db *gorm.DB, cfg *config.Config) error {
 	var existing models.User
 	err := db.Where("email = ?", cfg.AdminEmail).First(&existing).Error
 	if err == nil {
@@ -49,7 +49,7 @@ func seedAdmin(db *gorm.DB, cfg *config.Config) error {
 	return db.Create(admin).Error
 }
 
-func seedRoles(db *gorm.DB) error {
+func SeedRoles(db *gorm.DB) error {
 	roles := []models.Role{
 		{
 			ID:   uuid.New(),
@@ -80,7 +80,7 @@ func seedRoles(db *gorm.DB) error {
 	return nil
 }
 
-func seedPermissions(db *gorm.DB) error {
+func SeedPermissions(db *gorm.DB) error {
 	for _, perm := range constants.AllPermissions {
 		code := string(perm)
 
@@ -99,7 +99,7 @@ func seedPermissions(db *gorm.DB) error {
 	return nil
 }
 
-func seedRolePermissions(db *gorm.DB) error {
+func SeedRolePermissions(db *gorm.DB) error {
 	for roleCode, perms := range constants.RolePermissions {
 
 		var role models.Role

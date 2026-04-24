@@ -22,7 +22,7 @@ type auditLogService struct {
 	repo repositories.AuditLogRepository
 }
 
-func NewAuditLogService(repo repositories.AuditLogRepository) AuditLogger {
+func NewAuditLogService(repo repositories.AuditLogRepository) *auditLogService {
 	return &auditLogService{repo: repo}
 }
 

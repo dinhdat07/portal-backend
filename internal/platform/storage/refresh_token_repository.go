@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"portal-system/internal/models"
-	"portal-system/internal/repositories"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,7 +13,7 @@ type GormRefreshTokenRepository struct {
 	db *gorm.DB
 }
 
-func NewGormRefreshTokenRepository(db *gorm.DB) repositories.RefreshTokenRepository {
+func NewGormRefreshTokenRepository(db *gorm.DB) *GormRefreshTokenRepository {
 	return &GormRefreshTokenRepository{db: db}
 }
 

@@ -48,7 +48,7 @@ type AdminServiceDeps struct {
 	FrontendURL  string
 }
 
-func NewAdminService(deps AdminServiceDeps) AdminService {
+func NewAdminService(deps AdminServiceDeps) *adminService {
 	return &adminService{
 		txManager:    deps.TxManager,
 		userRepo:     deps.UserRepo,

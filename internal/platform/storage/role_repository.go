@@ -4,7 +4,6 @@ import (
 	"context"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/models"
-	"portal-system/internal/repositories"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,7 +13,7 @@ type GormRoleRepository struct {
 	db *gorm.DB
 }
 
-func NewGormRoleRepository(db *gorm.DB) repositories.RoleRepository {
+func NewGormRoleRepository(db *gorm.DB) *GormRoleRepository {
 	return &GormRoleRepository{db: db}
 }
 

@@ -11,17 +11,17 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type manager struct {
+type Manager struct {
 	secret   []byte // HMAC requires []byte
 	tokenTTL time.Duration
 }
 
-func New(secret string, ttlSec int) services.TokenIssuer {
+func New(secret string, ttlSec int) *Manager {
 	tokenTTL := time.Duration(ttlSec) * time.Second
-	return &manager{[]byte(secret), tokenTTL}
+	return &Manager{[]byte(secret), tokenTTL}
 }
 
-func (m *manager) GenerateAccessToken(input services.GenerateAccessTokenInput) (string, error) {
+func (m *Manager) GenerateAccessToken(input services.GenerateAccessTokenInput) (string, error) {
 	now := time.Now()
 
 	claims := claims{
@@ -42,11 +42,11 @@ func (m *manager) GenerateAccessToken(input services.GenerateAccessTokenInput) (
 	return token.SignedString(m.secret)
 }
 
-func (m *manager) GenerateRefreshToken() (string, error) {
+func (m *Manager) GenerateRefreshToken() (string, error) {
 	return m.generateSecureToken(32)
 }
 
-func (m *manager) Parse(tokenString string) (*services.TokenClaims, error) {
+func (m *Manager) Parse(tokenString string) (*services.TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&claims{},
@@ -68,16 +68,16 @@ func (m *manager) Parse(tokenString string) (*services.TokenClaims, error) {
 	return toTokenClaims(parsedClaims), nil
 }
 
-func (m *manager) HashToken(raw string) string {
+func (m *Manager) HashToken(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
 
-func (m *manager) ExpiresInSeconds() int {
+func (m *Manager) ExpiresInSeconds() int {
 	return int(m.tokenTTL.Seconds())
 }
 
-func (m *manager) GenerateHashToken() (string, string, error) {
+func (m *Manager) GenerateHashToken() (string, string, error) {
 	rawToken, err := m.generateSecureToken(32)
 	if err != nil {
 		return "", "", err
@@ -86,7 +86,7 @@ func (m *manager) GenerateHashToken() (string, string, error) {
 	return tokenHash, rawToken, nil
 }
 
-func (m *manager) generateSecureToken(length int) (string, error) {
+func (m *Manager) generateSecureToken(length int) (string, error) {
 	b := make([]byte, length)
 
 	if _, err := rand.Read(b); err != nil {

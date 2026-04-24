@@ -4,7 +4,6 @@ import (
 	"context"
 	"portal-system/internal/domain"
 	"portal-system/internal/models"
-	"portal-system/internal/repositories"
 
 	"gorm.io/gorm"
 )
@@ -13,7 +12,7 @@ type GormAuditLogRepository struct {
 	db *gorm.DB
 }
 
-func NewGormAuditLogRepository(db *gorm.DB) repositories.AuditLogRepository {
+func NewGormAuditLogRepository(db *gorm.DB) *GormAuditLogRepository {
 	return &GormAuditLogRepository{db: db}
 }
 

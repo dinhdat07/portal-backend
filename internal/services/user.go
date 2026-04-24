@@ -36,7 +36,7 @@ type UserServiceDeps struct {
 	UserRepo    repositories.UserRepository
 }
 
-func NewUserService(deps UserServiceDeps) UserService {
+func NewUserService(deps UserServiceDeps) *userService {
 	return &userService{
 		txManager:   deps.TxManager,
 		userRepo:    deps.UserRepo,
