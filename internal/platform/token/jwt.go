@@ -19,7 +19,7 @@ type Claims struct {
 }
 
 type Manager struct {
-	secret   []byte //HMAC requires []byte
+	secret   []byte // HMAC requires []byte
 	tokenTTL time.Duration
 }
 

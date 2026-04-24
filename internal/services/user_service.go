@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	appLogger "log"
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
@@ -49,7 +50,9 @@ func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, 
 
 	if actor.RoleCode == constants.RoleCodeAdmin {
 		target := domain.MapUserToAuditUser(user)
-		svc.auditLogger.Log(ctx, meta, enum.ActionAdminViewUser, actor, target)
+		if err := svc.auditLogger.Log(ctx, meta, enum.ActionAdminViewUser, actor, target); err != nil {
+			appLogger.Println("failed to log admin view user action", "error", err)
+		}
 	}
 
 	return user, nil
@@ -69,7 +72,7 @@ func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMe
 		return ErrInvalidInput
 	}
 
-	//check nil before compare to avoid panic
+	// check nil before compare to avoid panic
 	if user.PasswordHash == nil || *user.PasswordHash == "" {
 		return ErrUnauthorized
 	}

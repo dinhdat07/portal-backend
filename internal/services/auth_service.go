@@ -243,7 +243,9 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 	}
 
 	actor := domain.MapUserToAuditUser(user)
-	s.auditLogger.Log(ctx, meta, enum.ActionLogin, actor, nil)
+	if err := s.auditLogger.Log(ctx, meta, enum.ActionLogin, actor, nil); err != nil {
+		appLogger.Println("failed to log user login action", "error", err)
+	}
 
 	return &domain.LoginResult{
 		AccessToken:  accessToken,

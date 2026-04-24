@@ -11,6 +11,7 @@ import (
 	"portal-system/internal/models"
 	"portal-system/internal/repositories"
 
+	appLogger "log"
 	"time"
 
 	"github.com/google/uuid"
@@ -86,14 +87,16 @@ func (svc *AdminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, 
 		"total":        total,
 	}
 
-	svc.auditLogger.LogWithMetadata(
+	if err := svc.auditLogger.LogWithMetadata(
 		ctx,
 		meta,
 		enum.ActionAdminSearchUser,
 		actor,
 		nil,
 		logMeta,
-	)
+	); err != nil {
+		appLogger.Println("failed to log admin search user action", "error", err)
+	}
 
 	return &domain.ListUsersResult{
 		Users:    users,
