@@ -6,7 +6,9 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
+	authmocks "portal-system/internal/mocks/auth"
 	repositoriesmocks "portal-system/internal/mocks/repositories"
+	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
 	"testing"
 	"time"
@@ -61,8 +63,8 @@ func TestAdminService_ListUsers_Table(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Maybe()
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().LogWithMetadata(mock.Anything, meta, enum.ActionAdminSearchUser, actor, (*domain.AuditUser)(nil), mock.Anything).Return(nil).Maybe()
 			roleRepo := repositoriesmocks.NewRoleRepository(t)
 			roleRepo.EXPECT().FindByCode(mock.Anything, roleCode).RunAndReturn(func(ctx context.Context, code constants.RoleCode) (*models.Role, error) {
 				if tc.roleErr != nil {
@@ -80,8 +82,9 @@ func TestAdminService_ListUsers_Table(t *testing.T) {
 
 			tx := repositoriesmocks.NewTxManager(t)
 			tokenRepo := repositoriesmocks.NewUserTokenRepository(t)
-			email := &emailSenderMock{}
-			svc := newAdminServiceForTest(tx, auditRepo, userRepo, tokenRepo, roleRepo, email)
+			email := servicesmocks.NewEmailSender(t)
+			tokenMgr := authmocks.NewTokenIssuer(t)
+			svc := newAdminServiceForTest(tx, auditLogger, userRepo, tokenRepo, roleRepo, tokenMgr, email)
 			out, err := svc.ListUsers(context.Background(), meta, actor, tc.filter)
 			if tc.expected == nil {
 				if err != nil {
@@ -98,7 +101,7 @@ func TestAdminService_ListUsers_Table(t *testing.T) {
 			}
 
 			if tc.expectAudit {
-				auditRepo.AssertNumberOfCalls(t, "Create", 1)
+				auditLogger.AssertNumberOfCalls(t, "LogWithMetadata", 1)
 			}
 		})
 	}
@@ -226,10 +229,8 @@ func TestAdminService_CreateUser_Table(t *testing.T) {
 			tx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
 				return fn(ctx)
 			}).Maybe()
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
-				return tc.auditErr
-			}).Maybe()
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, meta, enum.ActionAdminCreateUser, actor, mock.Anything).Return(tc.auditErr).Maybe()
 			userRepo := repositoriesmocks.NewUserRepository(t)
 			userRepo.EXPECT().FindByEmail(mock.Anything, input.Email).RunAndReturn(func(ctx context.Context, email string) (*models.User, error) {
 				return tc.findEmail, tc.findEmailErr
@@ -260,12 +261,11 @@ func TestAdminService_CreateUser_Table(t *testing.T) {
 				}
 				return role, nil
 			}).Maybe()
-			email := &emailSenderMock{
-				sendSetFn: func(ctx context.Context, to, name, setPasswordURL string) error {
-					return tc.emailErr
-				},
-			}
-			svc := newAdminServiceForTest(tx, auditRepo, userRepo, tokenRepo, roleRepo, email)
+			email := servicesmocks.NewEmailSender(t)
+			email.EXPECT().SendSetPasswordEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tc.emailErr).Maybe()
+			tokenMgr := authmocks.NewTokenIssuer(t)
+			tokenMgr.EXPECT().GenerateHashToken().Return("token-hash", "raw-token", nil).Maybe()
+			svc := newAdminServiceForTest(tx, auditLogger, userRepo, tokenRepo, roleRepo, tokenMgr, email)
 
 			user, err := svc.CreateUser(context.Background(), meta, actor, tc.in)
 			if tc.expected == nil {
@@ -282,8 +282,8 @@ func TestAdminService_CreateUser_Table(t *testing.T) {
 			if tc.expectCreate {
 				tx.AssertNumberOfCalls(t, "WithTx", 1)
 			}
-			if tc.expectEmailSend && email.setCalled == 0 {
-				t.Fatal("expected set-password email send")
+			if tc.expectEmailSend {
+				email.AssertNumberOfCalls(t, "SendSetPasswordEmail", 1)
 			}
 		})
 	}
@@ -346,8 +346,8 @@ func TestAdminService_DeleteUser_Table(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error { return tc.auditErr }).Maybe()
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, meta, enum.ActionAdminDeleteUser, actor, mock.Anything).Return(tc.auditErr).Maybe()
 			userRepo := repositoriesmocks.NewUserRepository(t)
 			userRepo.EXPECT().FindByID(mock.Anything, baseUser.ID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (*models.User, error) {
 				if tc.findErr != nil {
@@ -369,7 +369,7 @@ func TestAdminService_DeleteUser_Table(t *testing.T) {
 			tx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
 				return fn(ctx)
 			}).Maybe()
-			svc := newAdminServiceForTest(tx, auditRepo, userRepo, nil, roleRepo, nil)
+			svc := newAdminServiceForTest(tx, auditLogger, userRepo, nil, roleRepo, nil, nil)
 
 			got, err := svc.DeleteUser(context.Background(), meta, actor, baseUser.ID)
 			if tc.expected == nil {
@@ -387,7 +387,7 @@ func TestAdminService_DeleteUser_Table(t *testing.T) {
 				tx.AssertNumberOfCalls(t, "WithTx", 1)
 			}
 			if tc.expectAudit {
-				auditRepo.AssertNumberOfCalls(t, "Create", 1)
+				auditLogger.AssertNumberOfCalls(t, "Log", 1)
 			}
 		})
 	}
@@ -436,8 +436,8 @@ func TestAdminService_RestoreUser_Table(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error { return tc.auditErr }).Maybe()
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, meta, enum.ActionAdminRestoreUser, actor, mock.Anything).Return(tc.auditErr).Maybe()
 			userRepo := repositoriesmocks.NewUserRepository(t)
 			userRepo.EXPECT().FindByIDUnscoped(mock.Anything, userID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (*models.User, error) {
 				if tc.findErr != nil {
@@ -452,7 +452,7 @@ func TestAdminService_RestoreUser_Table(t *testing.T) {
 			tx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
 				return fn(ctx)
 			}).Maybe()
-			svc := newAdminServiceForTest(tx, auditRepo, userRepo, nil, nil, nil)
+			svc := newAdminServiceForTest(tx, auditLogger, userRepo, nil, nil, nil, nil)
 
 			got, err := svc.RestoreUser(context.Background(), meta, actor, userID)
 			if tc.expected == nil {
@@ -470,7 +470,7 @@ func TestAdminService_RestoreUser_Table(t *testing.T) {
 				tx.AssertNumberOfCalls(t, "WithTx", 1)
 			}
 			if tc.expectAudit {
-				auditRepo.AssertNumberOfCalls(t, "Create", 1)
+				auditLogger.AssertNumberOfCalls(t, "Log", 1)
 			}
 		})
 	}
@@ -558,10 +558,8 @@ func TestAdminService_UpdateRole_Table(t *testing.T) {
 			if tc.sameRole {
 				targetRole = &models.Role{ID: tc.user.RoleID, Code: tc.user.Role.Code}
 			}
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
-				return tc.auditErr
-			}).Maybe()
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().LogWithMetadata(mock.Anything, meta, enum.ActionAdminAssignRole, actor, mock.Anything, mock.Anything).Return(tc.auditErr).Maybe()
 			userRepo := repositoriesmocks.NewUserRepository(t)
 			userRepo.EXPECT().FindByID(mock.Anything, userID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (*models.User, error) {
 				if tc.findErr != nil {
@@ -591,7 +589,7 @@ func TestAdminService_UpdateRole_Table(t *testing.T) {
 			tx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
 				return fn(ctx)
 			}).Maybe()
-			svc := newAdminServiceForTest(tx, auditRepo, userRepo, nil, roleRepo, nil)
+			svc := newAdminServiceForTest(tx, auditLogger, userRepo, nil, roleRepo, nil, nil)
 
 			got, err := svc.UpdateRole(context.Background(), meta, actor, userID, tc.roleCode)
 			if tc.expected == nil {
@@ -609,7 +607,7 @@ func TestAdminService_UpdateRole_Table(t *testing.T) {
 				tx.AssertNumberOfCalls(t, "WithTx", 1)
 			}
 			if tc.expectAudit {
-				auditRepo.AssertNumberOfCalls(t, "Create", 1)
+				auditLogger.AssertNumberOfCalls(t, "LogWithMetadata", 1)
 			}
 		})
 	}

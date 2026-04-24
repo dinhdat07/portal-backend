@@ -65,7 +65,7 @@ func TestAuditLogService_List_Table(t *testing.T) {
 				captured = filter
 				return tc.listLogs, tc.listTotal, tc.listErr
 			}).Maybe()
-			svc := NewAuditLogService(repo)
+			svc := &auditLogService{repo: repo}
 
 			logs, total, err := svc.List(context.Background(), tc.filter)
 			switch {

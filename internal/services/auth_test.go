@@ -3,12 +3,14 @@ package services
 import (
 	"context"
 	"errors"
+	"portal-system/internal/auth"
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
+	authmocks "portal-system/internal/mocks/auth"
 	repositoriesmocks "portal-system/internal/mocks/repositories"
+	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
-	"portal-system/internal/platform/token"
 	"testing"
 	"time"
 
@@ -84,24 +86,21 @@ func TestAuthService_Register_Table(t *testing.T) {
 				}
 				return role, nil
 			}).Maybe()
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
-				return tc.auditErr
-			}).Maybe()
-			email := &emailSenderMock{sendVerificationFn: func(ctx context.Context, to, name, verifyURL string) error {
-				return tc.emailErr
-			}}
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, mock.Anything, enum.ActionRegister, mock.Anything, mock.Anything).Return(tc.auditErr).Maybe()
+			email := servicesmocks.NewEmailSender(t)
+			email.EXPECT().SendVerificationEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tc.emailErr).Maybe()
 			tx := repositoriesmocks.NewTxManager(t)
 			tx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
 				return fn(ctx)
 			}).Maybe()
 			svc := newAuthServiceForTest(authServiceTestDeps{
-				auditRepo: auditRepo,
-				userRepo:  userRepo,
-				tokenRepo: tokenRepo,
-				roleRepo:  roleRepo,
-				email:     email,
-				tx:        tx,
+				auditLogger: auditLogger,
+				userRepo:    userRepo,
+				tokenRepo:   tokenRepo,
+				roleRepo:    roleRepo,
+				email:       email,
+				tx:          tx,
 			})
 
 			err := svc.Register(context.Background(), meta, "john@example.com", "john", "Passw0rd!", "John", "Doe", dob)
@@ -191,24 +190,24 @@ func TestAuthService_LogIn_Table(t *testing.T) {
 				}
 				return tc.createRefreshErr
 			}).Maybe()
-			tokenMgr := &tokenIssuerMock{
-				generateRefreshFn: func() (string, error) {
-					if tc.refreshErr != nil {
-						return "", tc.refreshErr
-					}
-					return "refresh-token", nil
-				},
-				generateAccessTokenFn: func(input token.GenerateAccessTokenInput) (string, error) {
-					if tc.accessErr != nil {
-						return "", tc.accessErr
-					}
-					return "access-token", nil
-				},
-				expiresInSecondsFn: func() int { return 900 },
-			}
+			tokenMgr := authmocks.NewTokenIssuer(t)
+			tokenMgr.EXPECT().GenerateRefreshToken().RunAndReturn(func() (string, error) {
+				if tc.refreshErr != nil {
+					return "", tc.refreshErr
+				}
+				return "refresh-token", nil
+			}).Maybe()
+			tokenMgr.EXPECT().GenerateAccessToken(mock.Anything).RunAndReturn(func(input auth.GenerateAccessTokenInput) (string, error) {
+				if tc.accessErr != nil {
+					return "", tc.accessErr
+				}
+				return "access-token", nil
+			}).Maybe()
+			tokenMgr.EXPECT().ExpiresInSeconds().Return(900).Maybe()
+			tokenMgr.EXPECT().HashToken("refresh-token").Return("hashed-refresh-token").Maybe()
 
 			svc := newAuthServiceForTest(authServiceTestDeps{
-				auditRepo:   newAuditLogRepo(),
+				auditLogger: newAuditLoggerMock(),
 				userRepo:    userRepo,
 				refreshRepo: refreshRepo,
 				sessionRepo: sessionRepo,
@@ -284,12 +283,12 @@ func TestAuthService_VerifyEmail_Table(t *testing.T) {
 			userRepo.EXPECT().MarkEmailVerified(mock.Anything, foundToken.UserID).RunAndReturn(func(ctx context.Context, id uuid.UUID) error {
 				return tc.markVerifiedErr
 			}).Maybe()
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error { return tc.auditErr }).Maybe()
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, meta, enum.ActionVerifyEmail, mock.Anything, mock.Anything).Return(tc.auditErr).Maybe()
 			svc := newAuthServiceForTest(authServiceTestDeps{
-				auditRepo: auditRepo,
-				userRepo:  userRepo,
-				tokenRepo: tokenRepo,
+				auditLogger: auditLogger,
+				userRepo:    userRepo,
+				tokenRepo:   tokenRepo,
 			})
 
 			err := svc.VerifyEmail(context.Background(), meta, "raw-token", tc.tokenType)
@@ -341,14 +340,15 @@ func TestAuthService_ResendVerification_Table(t *testing.T) {
 			tokenRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, token *models.UserToken) error {
 				return tc.tokenCreateErr
 			}).Maybe()
-			email := &emailSenderMock{sendVerificationFn: func(ctx context.Context, to, name, verifyURL string) error { return tc.emailErr }}
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error { return tc.auditErr }).Maybe()
+			email := servicesmocks.NewEmailSender(t)
+			email.EXPECT().SendVerificationEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tc.emailErr).Maybe()
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, meta, enum.ActionResendVerification, mock.Anything, mock.Anything).Return(tc.auditErr).Maybe()
 			svc := newAuthServiceForTest(authServiceTestDeps{
-				auditRepo: auditRepo,
-				userRepo:  userRepo,
-				tokenRepo: tokenRepo,
-				email:     email,
+				auditLogger: auditLogger,
+				userRepo:    userRepo,
+				tokenRepo:   tokenRepo,
+				email:       email,
 			})
 
 			err := svc.ResendVerification(context.Background(), meta, user.Email, enum.TokenTypeEmailVerification)
@@ -403,14 +403,15 @@ func TestAuthService_ForgotPassword_Table(t *testing.T) {
 			tokenRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, token *models.UserToken) error {
 				return tc.tokenCreateErr
 			}).Maybe()
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error { return tc.auditErr }).Maybe()
-			email := &emailSenderMock{sendResetFn: func(ctx context.Context, to, name, resetURL string) error { return tc.emailErr }}
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, meta, enum.ActionForgotPassword, mock.Anything, mock.Anything).Return(tc.auditErr).Maybe()
+			email := servicesmocks.NewEmailSender(t)
+			email.EXPECT().SendResetPasswordEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tc.emailErr).Maybe()
 			svc := newAuthServiceForTest(authServiceTestDeps{
-				auditRepo: auditRepo,
-				userRepo:  userRepo,
-				tokenRepo: tokenRepo,
-				email:     email,
+				auditLogger: auditLogger,
+				userRepo:    userRepo,
+				tokenRepo:   tokenRepo,
+				email:       email,
 			})
 
 			err := svc.ForgotPassword(context.Background(), meta, "john@example.com")
@@ -492,14 +493,14 @@ func TestAuthService_SetAndResetPassword_Table(t *testing.T) {
 			userRepo.EXPECT().MarkEmailVerified(mock.Anything, userID).RunAndReturn(func(ctx context.Context, id uuid.UUID) error {
 				return tc.markVerifyErr
 			}).Maybe()
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, meta, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser) error {
 				return tc.auditErr
 			}).Maybe()
 			svc := newAuthServiceForTest(authServiceTestDeps{
-				auditRepo: auditRepo,
-				userRepo:  userRepo,
-				tokenRepo: tokenRepo,
+				auditLogger: auditLogger,
+				userRepo:    userRepo,
+				tokenRepo:   tokenRepo,
 			})
 
 			var err error
@@ -602,15 +603,18 @@ func TestAuthService_Refresh_Table(t *testing.T) {
 				}
 				return cloneUser(tc.user), nil
 			}).Maybe()
-			tokenMgr := &tokenIssuerMock{
-				generateAccessTokenFn: func(input token.GenerateAccessTokenInput) (string, error) {
-					if tc.accessErr != nil {
-						return "", tc.accessErr
-					}
-					return "access-token", nil
-				},
-				expiresInSecondsFn: func() int { return 1200 },
-			}
+			tokenMgr := authmocks.NewTokenIssuer(t)
+			tokenMgr.EXPECT().GenerateAccessToken(mock.Anything).RunAndReturn(func(input auth.GenerateAccessTokenInput) (string, error) {
+				if tc.accessErr != nil {
+					return "", tc.accessErr
+				}
+				return "access-token", nil
+			}).Maybe()
+			tokenMgr.EXPECT().ExpiresInSeconds().Return(1200).Maybe()
+			tokenMgr.EXPECT().GenerateHashToken().Return("next-hash", "next-refresh-token", nil).Maybe()
+			tokenMgr.EXPECT().HashToken(mock.Anything).RunAndReturn(func(raw string) string {
+				return raw
+			}).Maybe()
 			svc := newAuthServiceForTest(authServiceTestDeps{
 				userRepo:    userRepo,
 				refreshRepo: refreshRepo,

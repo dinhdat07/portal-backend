@@ -7,6 +7,7 @@ import (
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	repositoriesmocks "portal-system/internal/mocks/repositories"
+	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
 	"testing"
 	"time"
@@ -159,10 +160,10 @@ func TestUserService_UpdateProfile_Table(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			adminRole := &models.Role{ID: adminRoleID, Code: constants.RoleCodeAdmin}
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
-				if tc.expectAction != "" && log.Action != tc.expectAction {
-					t.Fatalf("expected audit action %s, got %s", tc.expectAction, log.Action)
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().LogWithMetadata(mock.Anything, meta, mock.Anything, tc.actor, mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser, data map[string]any) error {
+				if tc.expectAction != "" && action != tc.expectAction {
+					t.Fatalf("expected audit action %s, got %s", tc.expectAction, action)
 				}
 				return tc.auditErr
 			}).Maybe()
@@ -195,7 +196,7 @@ func TestUserService_UpdateProfile_Table(t *testing.T) {
 			}).Maybe()
 			svc := NewUserService(UserServiceDeps{
 				TxManager:   tx,
-				AuditLogger: NewAuditLogService(auditRepo),
+				AuditLogger: auditLogger,
 				RoleRepo:    roleRepo,
 				UserRepo:    userRepo,
 			})
@@ -230,9 +231,9 @@ func TestUserService_UpdateProfile_Table(t *testing.T) {
 				userRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 			}
 			if tc.expectAudit {
-				auditRepo.AssertNumberOfCalls(t, "Create", 1)
+				auditLogger.AssertNumberOfCalls(t, "LogWithMetadata", 1)
 			} else {
-				auditRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+				auditLogger.AssertNotCalled(t, "LogWithMetadata", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 			}
 		})
 	}
@@ -243,12 +244,12 @@ func TestUserService_GetProfile_UserNotFound(t *testing.T) {
 	userRepo.EXPECT().FindByID(mock.Anything, mock.Anything).Return(nil, gorm.ErrRecordNotFound)
 	roleRepo := repositoriesmocks.NewRoleRepository(t)
 	tx := repositoriesmocks.NewTxManager(t)
-	auditRepo := repositoriesmocks.NewAuditLogRepository(t)
+	auditLogger := servicesmocks.NewAuditLogger(t)
 	svc := NewUserService(UserServiceDeps{
 		UserRepo:    userRepo,
 		RoleRepo:    roleRepo,
 		TxManager:   tx,
-		AuditLogger: NewAuditLogService(auditRepo),
+		AuditLogger: auditLogger,
 	})
 
 	actor := &domain.AuditUser{ID: uuid.New(), RoleCode: constants.RoleCodeUser}
@@ -260,9 +261,13 @@ func TestUserService_GetProfile_UserNotFound(t *testing.T) {
 }
 
 func TestUserService_GetProfile_AdminWritesAuditLog(t *testing.T) {
-	auditRepo := repositoriesmocks.NewAuditLogRepository(t)
 	userID := uuid.New()
-	var capturedLog *models.AuditLog
+	var capturedAction enum.ActionName
+	auditLogger := servicesmocks.NewAuditLogger(t)
+	auditLogger.EXPECT().Log(mock.Anything, mock.Anything, enum.ActionAdminViewUser, mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser) error {
+		capturedAction = action
+		return nil
+	}).Once()
 	userRepo := repositoriesmocks.NewUserRepository(t)
 	userRepo.EXPECT().FindByID(mock.Anything, userID).Return(&models.User{
 		ID:       userID,
@@ -272,17 +277,13 @@ func TestUserService_GetProfile_AdminWritesAuditLog(t *testing.T) {
 			Code: constants.RoleCodeUser,
 		},
 	}, nil)
-	auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
-		capturedLog = log
-		return nil
-	}).Once()
 	roleRepo := repositoriesmocks.NewRoleRepository(t)
 	tx := repositoriesmocks.NewTxManager(t)
 	svc := NewUserService(UserServiceDeps{
 		UserRepo:    userRepo,
 		RoleRepo:    roleRepo,
 		TxManager:   tx,
-		AuditLogger: NewAuditLogService(auditRepo),
+		AuditLogger: auditLogger,
 	})
 
 	actor := &domain.AuditUser{ID: uuid.New(), RoleCode: constants.RoleCodeAdmin, Username: "admin", Email: "admin@example.com"}
@@ -294,14 +295,11 @@ func TestUserService_GetProfile_AdminWritesAuditLog(t *testing.T) {
 	if user == nil || user.ID != userID {
 		t.Fatalf("expected user with id %s", userID)
 	}
-	if !auditRepo.AssertNumberOfCalls(t, "Create", 1) {
+	if !auditLogger.AssertNumberOfCalls(t, "Log", 1) {
 		t.Fatal("expected exactly one audit log create call")
 	}
-	if capturedLog == nil {
-		t.Fatal("expected captured audit log")
-	}
-	if capturedLog.Action != enum.ActionAdminViewUser {
-		t.Fatalf("expected action %s, got %s", enum.ActionAdminViewUser, capturedLog.Action)
+	if capturedAction != enum.ActionAdminViewUser {
+		t.Fatalf("expected action %s, got %s", enum.ActionAdminViewUser, capturedAction)
 	}
 }
 
@@ -413,8 +411,8 @@ func TestUserService_ChangePassword_Table(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			auditRepo := repositoriesmocks.NewAuditLogRepository(t)
-			auditRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, log *models.AuditLog) error {
+			auditLogger := servicesmocks.NewAuditLogger(t)
+			auditLogger.EXPECT().Log(mock.Anything, meta, enum.ActionChangePassword, actor, actor).RunAndReturn(func(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser) error {
 				return tc.auditErr
 			}).Maybe()
 			userRepo := repositoriesmocks.NewUserRepository(t)
@@ -440,7 +438,7 @@ func TestUserService_ChangePassword_Table(t *testing.T) {
 			roleRepo := repositoriesmocks.NewRoleRepository(t)
 			svc := NewUserService(UserServiceDeps{
 				TxManager:   txManager,
-				AuditLogger: NewAuditLogService(auditRepo),
+				AuditLogger: auditLogger,
 				RoleRepo:    roleRepo,
 				UserRepo:    userRepo,
 			})
@@ -466,9 +464,9 @@ func TestUserService_ChangePassword_Table(t *testing.T) {
 				userRepo.AssertNotCalled(t, "UpdatePassword", mock.Anything, mock.Anything, mock.Anything)
 			}
 			if tc.expectAuditCall {
-				auditRepo.AssertNumberOfCalls(t, "Create", 1)
+				auditLogger.AssertNumberOfCalls(t, "Log", 1)
 			} else {
-				auditRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+				auditLogger.AssertNotCalled(t, "Log", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 			}
 		})
 	}
