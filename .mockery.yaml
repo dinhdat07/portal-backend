@@ -17,16 +17,6 @@ packages:
       UserRepository: {}
       UserTokenRepository: {}
 
-  portal-system/internal/auth:
-    config:
-      dir: internal/mocks/auth
-      pkgname: authmocks
-      filename: "{{.InterfaceName | snakecase}}.go"
-      structname: "{{.InterfaceName}}"
-    interfaces:
-      SessionRevocationStore: {}
-      TokenIssuer: {}
-
   portal-system/internal/services:
     config:
       dir: internal/mocks/services
@@ -38,4 +28,6 @@ packages:
       AuditLogger: {}
       AuthService: {}
       EmailSender: {}
+      SessionRevocationStore: {}
+      TokenIssuer: {}
       UserService: {}

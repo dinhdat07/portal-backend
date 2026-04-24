@@ -1,4 +1,4 @@
-package services
+package services_test
 
 import (
 	"context"
@@ -6,10 +6,10 @@ import (
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
-	authmocks "portal-system/internal/mocks/auth"
 	repositoriesmocks "portal-system/internal/mocks/repositories"
 	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
+	. "portal-system/internal/services"
 	"testing"
 	"time"
 
@@ -83,7 +83,7 @@ func TestAdminService_ListUsers_Table(t *testing.T) {
 			tx := repositoriesmocks.NewTxManager(t)
 			tokenRepo := repositoriesmocks.NewUserTokenRepository(t)
 			email := servicesmocks.NewEmailSender(t)
-			tokenMgr := authmocks.NewTokenIssuer(t)
+			tokenMgr := servicesmocks.NewTokenIssuer(t)
 			svc := newAdminServiceForTest(tx, auditLogger, userRepo, tokenRepo, roleRepo, tokenMgr, email)
 			out, err := svc.ListUsers(context.Background(), meta, actor, tc.filter)
 			if tc.expected == nil {
@@ -263,7 +263,7 @@ func TestAdminService_CreateUser_Table(t *testing.T) {
 			}).Maybe()
 			email := servicesmocks.NewEmailSender(t)
 			email.EXPECT().SendSetPasswordEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tc.emailErr).Maybe()
-			tokenMgr := authmocks.NewTokenIssuer(t)
+			tokenMgr := servicesmocks.NewTokenIssuer(t)
 			tokenMgr.EXPECT().GenerateHashToken().Return("token-hash", "raw-token", nil).Maybe()
 			svc := newAdminServiceForTest(tx, auditLogger, userRepo, tokenRepo, roleRepo, tokenMgr, email)
 

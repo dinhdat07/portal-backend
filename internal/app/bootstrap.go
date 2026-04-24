@@ -100,13 +100,14 @@ func New() (*App, error) {
 	})
 
 	adminService := services.NewAdminService(services.AdminServiceDeps{
-		TxManager:   txManager,
-		AuditLogger: auditLogService,
-		UserRepo:    userRepo,
-		TokenRepo:   tokenRepo,
-		RoleRepo:    roleRepo,
-		EmailSvc:    emailService,
-		FrontendURL: cfg.FrontEndUrl,
+		TxManager:    txManager,
+		AuditLogger:  auditLogService,
+		UserRepo:     userRepo,
+		TokenManager: tokenManager,
+		TokenRepo:    tokenRepo,
+		RoleRepo:     roleRepo,
+		EmailSvc:     emailService,
+		FrontendURL:  cfg.FrontEndUrl,
 	})
 
 	authGRPC := portalgrpc.NewAuthServer(authService)

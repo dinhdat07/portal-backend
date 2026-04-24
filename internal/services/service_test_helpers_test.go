@@ -1,12 +1,12 @@
-package services
+package services_test
 
 import (
 	"context"
 	"time"
 
-	authmocks "portal-system/internal/mocks/auth"
 	repositoriesmocks "portal-system/internal/mocks/repositories"
 	servicesmocks "portal-system/internal/mocks/services"
+	. "portal-system/internal/services"
 
 	"github.com/stretchr/testify/mock"
 )
@@ -19,8 +19,8 @@ type authServiceTestDeps struct {
 	roleRepo    *repositoriesmocks.RoleRepository
 	refreshRepo *repositoriesmocks.RefreshTokenRepository
 	sessionRepo *repositoriesmocks.AuthSessionRepository
-	revoStore   *authmocks.SessionRevocationStore
-	tokenMgr    *authmocks.TokenIssuer
+	revoStore   *servicesmocks.SessionRevocationStore
+	tokenMgr    *servicesmocks.TokenIssuer
 	email       *servicesmocks.EmailSender
 }
 
@@ -30,7 +30,7 @@ func newAdminServiceForTest(
 	userRepo *repositoriesmocks.UserRepository,
 	tokenRepo *repositoriesmocks.UserTokenRepository,
 	roleRepo *repositoriesmocks.RoleRepository,
-	tokenMgr *authmocks.TokenIssuer,
+	tokenMgr *servicesmocks.TokenIssuer,
 	email *servicesmocks.EmailSender,
 ) AdminService {
 	if tx == nil {
@@ -110,15 +110,15 @@ func newAuditLoggerMock() *servicesmocks.AuditLogger {
 	return logger
 }
 
-func newSessionRevocationStore() *authmocks.SessionRevocationStore {
-	store := &authmocks.SessionRevocationStore{}
+func newSessionRevocationStore() *servicesmocks.SessionRevocationStore {
+	store := &servicesmocks.SessionRevocationStore{}
 	store.EXPECT().IsRevoked(mock.Anything, mock.Anything).Return(false, nil).Maybe()
 	store.EXPECT().MarkRevoked(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	return store
 }
 
-func newTokenIssuerMock() *authmocks.TokenIssuer {
-	tokenMgr := &authmocks.TokenIssuer{}
+func newTokenIssuerMock() *servicesmocks.TokenIssuer {
+	tokenMgr := &servicesmocks.TokenIssuer{}
 	tokenMgr.EXPECT().GenerateAccessToken(mock.Anything).Return("access-token", nil).Maybe()
 	tokenMgr.EXPECT().GenerateRefreshToken().Return("refresh-token", nil).Maybe()
 	tokenMgr.EXPECT().ExpiresInSeconds().Return(3600).Maybe()

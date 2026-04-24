@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"portal-system/internal/auth"
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
@@ -32,7 +31,7 @@ type adminService struct {
 	auditLogger  AuditLogger
 	userRepo     repositories.UserRepository
 	tokenRepo    repositories.UserTokenRepository
-	tokenManager auth.TokenIssuer
+	tokenManager TokenIssuer
 	roleRepo     repositories.RoleRepository
 	emailSvc     EmailSender
 	frontendURL  string
@@ -42,7 +41,7 @@ type AdminServiceDeps struct {
 	TxManager    repositories.TxManager
 	AuditLogger  AuditLogger
 	UserRepo     repositories.UserRepository
-	TokenManager auth.TokenIssuer
+	TokenManager TokenIssuer
 	TokenRepo    repositories.UserTokenRepository
 	RoleRepo     repositories.RoleRepository
 	EmailSvc     EmailSender

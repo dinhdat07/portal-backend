@@ -1,4 +1,4 @@
-package services
+package services_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	repositoriesmocks "portal-system/internal/mocks/repositories"
 	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
+	. "portal-system/internal/services"
 	"testing"
 	"time"
 

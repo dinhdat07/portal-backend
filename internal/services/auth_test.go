@@ -1,16 +1,15 @@
-package services
+package services_test
 
 import (
 	"context"
 	"errors"
-	"portal-system/internal/auth"
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
-	authmocks "portal-system/internal/mocks/auth"
 	repositoriesmocks "portal-system/internal/mocks/repositories"
 	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
+	. "portal-system/internal/services"
 	"testing"
 	"time"
 
@@ -190,19 +189,14 @@ func TestAuthService_LogIn_Table(t *testing.T) {
 				}
 				return tc.createRefreshErr
 			}).Maybe()
-			tokenMgr := authmocks.NewTokenIssuer(t)
+			tokenMgr := servicesmocks.NewTokenIssuer(t)
 			tokenMgr.EXPECT().GenerateRefreshToken().RunAndReturn(func() (string, error) {
 				if tc.refreshErr != nil {
 					return "", tc.refreshErr
 				}
 				return "refresh-token", nil
 			}).Maybe()
-			tokenMgr.EXPECT().GenerateAccessToken(mock.Anything).RunAndReturn(func(input auth.GenerateAccessTokenInput) (string, error) {
-				if tc.accessErr != nil {
-					return "", tc.accessErr
-				}
-				return "access-token", nil
-			}).Maybe()
+			tokenMgr.EXPECT().GenerateAccessToken(mock.Anything).Return("access-token", tc.accessErr).Maybe()
 			tokenMgr.EXPECT().ExpiresInSeconds().Return(900).Maybe()
 			tokenMgr.EXPECT().HashToken("refresh-token").Return("hashed-refresh-token").Maybe()
 
@@ -603,13 +597,8 @@ func TestAuthService_Refresh_Table(t *testing.T) {
 				}
 				return cloneUser(tc.user), nil
 			}).Maybe()
-			tokenMgr := authmocks.NewTokenIssuer(t)
-			tokenMgr.EXPECT().GenerateAccessToken(mock.Anything).RunAndReturn(func(input auth.GenerateAccessTokenInput) (string, error) {
-				if tc.accessErr != nil {
-					return "", tc.accessErr
-				}
-				return "access-token", nil
-			}).Maybe()
+			tokenMgr := servicesmocks.NewTokenIssuer(t)
+			tokenMgr.EXPECT().GenerateAccessToken(mock.Anything).Return("access-token", tc.accessErr).Maybe()
 			tokenMgr.EXPECT().ExpiresInSeconds().Return(1200).Maybe()
 			tokenMgr.EXPECT().GenerateHashToken().Return("next-hash", "next-refresh-token", nil).Maybe()
 			tokenMgr.EXPECT().HashToken(mock.Anything).RunAndReturn(func(raw string) string {

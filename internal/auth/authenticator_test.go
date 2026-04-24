@@ -5,9 +5,10 @@ import (
 	"errors"
 	"portal-system/internal/auth"
 	"portal-system/internal/domain/constants"
-	authmocks "portal-system/internal/mocks/auth"
 	repositoriesmocks "portal-system/internal/mocks/repositories"
+	servicesmocks "portal-system/internal/mocks/services"
 	"portal-system/internal/models"
+	"portal-system/internal/services"
 	"testing"
 
 	"github.com/google/uuid"
@@ -49,12 +50,12 @@ func TestAuthenticator_Authenticate_Table(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			manager := authmocks.NewTokenIssuer(t)
-			manager.EXPECT().Parse(tc.tokenString).RunAndReturn(func(tokenString string) (*auth.Claims, error) {
+			manager := servicesmocks.NewTokenIssuer(t)
+			manager.EXPECT().Parse(tc.tokenString).RunAndReturn(func(tokenString string) (*services.TokenClaims, error) {
 				if tokenString == "bad-token" {
 					return nil, errors.New("invalid token")
 				}
-				return &auth.Claims{
+				return &services.TokenClaims{
 					UserID:    userID,
 					SessionID: sessionID,
 					Username:  "john",
@@ -80,7 +81,7 @@ func TestAuthenticator_Authenticate_Table(t *testing.T) {
 				return tc.session, nil
 			}).Maybe()
 
-			revoStore := authmocks.NewSessionRevocationStore(t)
+			revoStore := servicesmocks.NewSessionRevocationStore(t)
 			revoStore.EXPECT().IsRevoked(mock.Anything, sessionID).RunAndReturn(func(ctx context.Context, id uuid.UUID) (bool, error) {
 				return tc.revoked, tc.revokeErr
 			}).Maybe()

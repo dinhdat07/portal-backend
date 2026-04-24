@@ -12,6 +12,10 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+func ptrTime(v time.Time) *time.Time {
+	return &v
+}
+
 func TestAuditLogService_List_Table(t *testing.T) {
 	now := time.Now()
 	tests := []struct {

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"portal-system/internal/auth"
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
@@ -46,8 +45,8 @@ type authService struct {
 	tokenRepo       repositories.UserTokenRepository
 	roleRepo        repositories.RoleRepository
 	sessionRepo     repositories.AuthSessionRepository
-	revoStore       auth.SessionRevocationStore
-	tokenManager    auth.TokenIssuer
+	revoStore       SessionRevocationStore
+	tokenManager    TokenIssuer
 	emailService    EmailSender
 	frontendBaseURL string
 	refreshTTL      time.Duration
@@ -61,9 +60,9 @@ type AuthServiceDeps struct {
 	TokenRepo        repositories.UserTokenRepository
 	RoleRepo         repositories.RoleRepository
 	SessionRepo      repositories.AuthSessionRepository
-	RevoStore        auth.SessionRevocationStore
+	RevoStore        SessionRevocationStore
 
-	TokenManager    auth.TokenIssuer
+	TokenManager    TokenIssuer
 	EmailService    EmailSender
 	FrontendBaseURL string
 	RefreshTTL      time.Duration
@@ -246,7 +245,7 @@ func (s *authService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 	}
 
 	accessToken, err := s.tokenManager.GenerateAccessToken(
-		auth.GenerateAccessTokenInput{
+		GenerateAccessTokenInput{
 			UserID:    user.ID,
 			SessionID: session.ID,
 			RoleID:    user.Role.ID,
@@ -570,7 +569,7 @@ func (s *authService) Refresh(ctx context.Context, meta *domain.AuditMeta, refre
 	}
 
 	accessToken, err := s.tokenManager.GenerateAccessToken(
-		auth.GenerateAccessTokenInput{
+		GenerateAccessTokenInput{
 			UserID:    user.ID,
 			SessionID: session.ID,
 			RoleID:    user.Role.ID,

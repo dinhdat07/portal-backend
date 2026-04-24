@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"portal-system/internal/auth"
+	"portal-system/internal/services"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -16,13 +16,15 @@ type manager struct {
 	tokenTTL time.Duration
 }
 
-func New(secret string, ttlSec int) auth.TokenIssuer {
+func New(secret string, ttlSec int) services.TokenIssuer {
 	tokenTTL := time.Duration(ttlSec) * time.Second
 	return &manager{[]byte(secret), tokenTTL}
 }
 
-func (m *manager) GenerateAccessToken(input auth.GenerateAccessTokenInput) (string, error) {
-	claims := auth.Claims{
+func (m *manager) GenerateAccessToken(input services.GenerateAccessTokenInput) (string, error) {
+	now := time.Now()
+
+	claims := claims{
 		UserID:    input.UserID,
 		SessionID: input.SessionID,
 		Username:  input.Username,
@@ -30,8 +32,8 @@ func (m *manager) GenerateAccessToken(input auth.GenerateAccessTokenInput) (stri
 		RoleCode:  input.RoleCode,
 		Email:     input.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.tokenTTL)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(m.tokenTTL)),
+			IssuedAt:  jwt.NewNumericDate(now),
 			Subject:   "access-token",
 		},
 	}
@@ -44,11 +46,10 @@ func (m *manager) GenerateRefreshToken() (string, error) {
 	return m.generateSecureToken(32)
 }
 
-func (m *manager) Parse(tokenString string) (*auth.Claims, error) {
-	// parsing token string need a pointer claim to receive value, and a key function to supply key for verify
+func (m *manager) Parse(tokenString string) (*services.TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(
 		tokenString,
-		&auth.Claims{},
+		&claims{},
 		func(t *jwt.Token) (interface{}, error) {
 			return m.secret, nil
 		},
@@ -59,12 +60,12 @@ func (m *manager) Parse(tokenString string) (*auth.Claims, error) {
 		return nil, errors.New("invalid token")
 	}
 
-	claims, ok := token.Claims.(*auth.Claims)
+	parsedClaims, ok := token.Claims.(*claims)
 	if !ok {
 		return nil, errors.New("invalid claims")
 	}
 
-	return claims, nil
+	return toTokenClaims(parsedClaims), nil
 }
 
 func (m *manager) HashToken(raw string) string {

@@ -2,10 +2,10 @@
 // github.com/vektra/mockery
 // template: testify
 
-package authmocks
+package servicesmocks
 
 import (
-	"portal-system/internal/auth"
+	"portal-system/internal/services"
 
 	mock "github.com/stretchr/testify/mock"
 )
@@ -82,7 +82,7 @@ func (_c *TokenIssuer_ExpiresInSeconds_Call) RunAndReturn(run func() int) *Token
 }
 
 // GenerateAccessToken provides a mock function for the type TokenIssuer
-func (_mock *TokenIssuer) GenerateAccessToken(input auth.GenerateAccessTokenInput) (string, error) {
+func (_mock *TokenIssuer) GenerateAccessToken(input services.GenerateAccessTokenInput) (string, error) {
 	ret := _mock.Called(input)
 
 	if len(ret) == 0 {
@@ -91,15 +91,15 @@ func (_mock *TokenIssuer) GenerateAccessToken(input auth.GenerateAccessTokenInpu
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(auth.GenerateAccessTokenInput) (string, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(services.GenerateAccessTokenInput) (string, error)); ok {
 		return returnFunc(input)
 	}
-	if returnFunc, ok := ret.Get(0).(func(auth.GenerateAccessTokenInput) string); ok {
+	if returnFunc, ok := ret.Get(0).(func(services.GenerateAccessTokenInput) string); ok {
 		r0 = returnFunc(input)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(auth.GenerateAccessTokenInput) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(services.GenerateAccessTokenInput) error); ok {
 		r1 = returnFunc(input)
 	} else {
 		r1 = ret.Error(1)
@@ -113,16 +113,16 @@ type TokenIssuer_GenerateAccessToken_Call struct {
 }
 
 // GenerateAccessToken is a helper method to define mock.On call
-//   - input auth.GenerateAccessTokenInput
+//   - input services.GenerateAccessTokenInput
 func (_e *TokenIssuer_Expecter) GenerateAccessToken(input interface{}) *TokenIssuer_GenerateAccessToken_Call {
 	return &TokenIssuer_GenerateAccessToken_Call{Call: _e.mock.On("GenerateAccessToken", input)}
 }
 
-func (_c *TokenIssuer_GenerateAccessToken_Call) Run(run func(input auth.GenerateAccessTokenInput)) *TokenIssuer_GenerateAccessToken_Call {
+func (_c *TokenIssuer_GenerateAccessToken_Call) Run(run func(input services.GenerateAccessTokenInput)) *TokenIssuer_GenerateAccessToken_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 auth.GenerateAccessTokenInput
+		var arg0 services.GenerateAccessTokenInput
 		if args[0] != nil {
-			arg0 = args[0].(auth.GenerateAccessTokenInput)
+			arg0 = args[0].(services.GenerateAccessTokenInput)
 		}
 		run(
 			arg0,
@@ -136,7 +136,7 @@ func (_c *TokenIssuer_GenerateAccessToken_Call) Return(s string, err error) *Tok
 	return _c
 }
 
-func (_c *TokenIssuer_GenerateAccessToken_Call) RunAndReturn(run func(input auth.GenerateAccessTokenInput) (string, error)) *TokenIssuer_GenerateAccessToken_Call {
+func (_c *TokenIssuer_GenerateAccessToken_Call) RunAndReturn(run func(input services.GenerateAccessTokenInput) (string, error)) *TokenIssuer_GenerateAccessToken_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -305,23 +305,23 @@ func (_c *TokenIssuer_HashToken_Call) RunAndReturn(run func(raw string) string) 
 }
 
 // Parse provides a mock function for the type TokenIssuer
-func (_mock *TokenIssuer) Parse(tokenString string) (*auth.Claims, error) {
+func (_mock *TokenIssuer) Parse(tokenString string) (*services.TokenClaims, error) {
 	ret := _mock.Called(tokenString)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Parse")
 	}
 
-	var r0 *auth.Claims
+	var r0 *services.TokenClaims
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (*auth.Claims, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(string) (*services.TokenClaims, error)); ok {
 		return returnFunc(tokenString)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string) *auth.Claims); ok {
+	if returnFunc, ok := ret.Get(0).(func(string) *services.TokenClaims); ok {
 		r0 = returnFunc(tokenString)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*auth.Claims)
+			r0 = ret.Get(0).(*services.TokenClaims)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
@@ -356,12 +356,12 @@ func (_c *TokenIssuer_Parse_Call) Run(run func(tokenString string)) *TokenIssuer
 	return _c
 }
 
-func (_c *TokenIssuer_Parse_Call) Return(claims *auth.Claims, err error) *TokenIssuer_Parse_Call {
+func (_c *TokenIssuer_Parse_Call) Return(claims *services.TokenClaims, err error) *TokenIssuer_Parse_Call {
 	_c.Call.Return(claims, err)
 	return _c
 }
 
-func (_c *TokenIssuer_Parse_Call) RunAndReturn(run func(tokenString string) (*auth.Claims, error)) *TokenIssuer_Parse_Call {
+func (_c *TokenIssuer_Parse_Call) RunAndReturn(run func(tokenString string) (*services.TokenClaims, error)) *TokenIssuer_Parse_Call {
 	_c.Call.Return(run)
 	return _c
 }
