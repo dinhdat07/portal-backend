@@ -23,11 +23,11 @@ const (
 
 type AdminServer struct {
 	adminv1.UnimplementedAdminServiceServer
-	adminService *services.AdminService
-	userService  *services.UserService
+	adminService services.AdminService
+	userService  services.UserService
 }
 
-func NewAdminServer(adminService *services.AdminService, userService *services.UserService) *AdminServer {
+func NewAdminServer(adminService services.AdminService, userService services.UserService) *AdminServer {
 	return &AdminServer{
 		adminService: adminService,
 		userService:  userService,

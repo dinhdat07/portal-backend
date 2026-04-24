@@ -2,8 +2,9 @@ package storage
 
 import (
 	"context"
-	"portal-system/internal/domain"
+	"errors"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,9 @@ func (r *GormAuthSessionRepository) FindActiveByRefreshTokenHash(ctx context.Con
 		First(&AuthSession).Error
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -48,21 +52,13 @@ func (r *GormAuthSessionRepository) FindActiveByID(ctx context.Context, id uuid.
 		First(&AuthSession).Error
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 
 	return &AuthSession, nil
-}
-
-func (r *GormAuthSessionRepository) RotateRefreshToken(ctx context.Context, in domain.RefreshInput) error {
-	return r.getDB(ctx).
-		Model(&models.AuthSession{}).
-		Where("id = ?", in.SessionID).
-		Updates(map[string]any{
-			"refresh_token_hash": in.NewTokenHash,
-			"expires_at":         in.NewExpiresAt,
-			"last_used_at":       in.RotatedAt,
-		}).Error
 }
 
 func (r *GormAuthSessionRepository) RevokeByID(ctx context.Context, sessionID uuid.UUID) error {
@@ -79,7 +75,7 @@ func (r *GormAuthSessionRepository) RevokeByID(ctx context.Context, sessionID uu
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil
@@ -92,6 +88,7 @@ func (r *GormAuthSessionRepository) RevokeAllByUserID(ctx context.Context, userI
 		Model(&models.AuthSession{}).
 		Where("user_id = ?", userID).
 		Where("revoked_at IS NULL").
+		Where("expires_at > ?", now).
 		Update("revoked_at", &now)
 
 	if result.Error != nil {
@@ -99,10 +96,27 @@ func (r *GormAuthSessionRepository) RevokeAllByUserID(ctx context.Context, userI
 	}
 
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return repositories.ErrNotFound
 	}
 
 	return nil
+}
+
+func (r *GormAuthSessionRepository) ListActiveByUserID(ctx context.Context, userID uuid.UUID) ([]models.AuthSession, error) {
+	now := time.Now().UTC()
+
+	var sessions []models.AuthSession
+	result := r.getDB(ctx).
+		Model(&models.AuthSession{}).
+		Where("user_id = ?", userID).
+		Where("revoked_at IS NULL").
+		Where("expires_at > ?", now).
+		Find(&sessions)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return sessions, nil
 }
 
 func (r *GormAuthSessionRepository) getDB(ctx context.Context) *gorm.DB {

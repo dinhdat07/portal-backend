@@ -1,0 +1,33 @@
+template: testify
+
+packages:
+  portal-system/internal/repositories:
+    config:
+      dir: internal/mocks/repositories
+      pkgname: repositoriesmocks
+      filename: "{{.InterfaceName | snakecase}}.go"
+      structname: "{{.InterfaceName}}"
+      all: true
+    interfaces:
+      AuditLogRepository: {}
+      AuthSessionRepository: {}
+      RefreshTokenRepository: {}
+      RoleRepository: {}
+      TxManager: {}
+      UserRepository: {}
+      UserTokenRepository: {}
+
+  portal-system/internal/services:
+    config:
+      dir: internal/mocks/services
+      pkgname: servicesmocks
+      filename: "{{.InterfaceName | snakecase}}.go"
+      structname: "{{.InterfaceName}}"
+    interfaces:
+      AdminService: {}
+      AuditLogger: {}
+      AuthService: {}
+      EmailSender: {}
+      SessionRevocationStore: {}
+      TokenIssuer: {}
+      UserService: {}

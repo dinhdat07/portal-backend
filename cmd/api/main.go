@@ -4,13 +4,14 @@ import (
 	"context"
 	"log"
 	"portal-system/internal/app"
+	"portal-system/internal/composer"
 	"portal-system/internal/platform/logger"
 )
 
 // Run with: go run github.com/air-verse/air@latest
 func main() {
 	logger.InitLogger()
-	application, err := app.New()
+	application, err := composer.Composer()
 	if err != nil {
 		log.Fatal(err)
 	}
