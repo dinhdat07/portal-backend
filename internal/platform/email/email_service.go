@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/smtp"
 	"portal-system/internal/config"
+	"portal-system/internal/services"
 	"strings"
 	"time"
 )
@@ -18,7 +19,7 @@ type SMTPEmailService struct {
 	cfg config.SMTPConfig
 }
 
-func NewSMTPEmailService(cfg config.SMTPConfig) *SMTPEmailService {
+func NewSMTPEmailService(cfg config.SMTPConfig) services.EmailSender {
 	return &SMTPEmailService{cfg: cfg}
 }
 

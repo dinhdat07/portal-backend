@@ -4,19 +4,17 @@ import (
 	"context"
 	"errors"
 	appLogger "log"
-	"portal-system/internal/platform/token"
 	"portal-system/internal/repositories"
-	"portal-system/internal/services"
 )
 
 type Authenticator struct {
-	manager     *token.Manager
+	manager     TokenIssuer
 	roleRepo    repositories.RoleRepository
 	sessionRepo repositories.AuthSessionRepository
-	revoStore   services.SessionRevocationStore
+	revoStore   SessionRevocationStore
 }
 
-func NewAuthenticator(manager *token.Manager, roleRepo repositories.RoleRepository, sessionRepo repositories.AuthSessionRepository, revoStore services.SessionRevocationStore) *Authenticator {
+func NewAuthenticator(manager TokenIssuer, roleRepo repositories.RoleRepository, sessionRepo repositories.AuthSessionRepository, revoStore SessionRevocationStore) *Authenticator {
 	return &Authenticator{manager: manager, roleRepo: roleRepo, sessionRepo: sessionRepo, revoStore: revoStore}
 }
 

@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"portal-system/internal/models"
+	"portal-system/internal/repositories"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,7 +14,7 @@ type GormAuthSessionRepository struct {
 	db *gorm.DB
 }
 
-func NewGormAuthSessionRepository(db *gorm.DB) *GormAuthSessionRepository {
+func NewGormAuthSessionRepository(db *gorm.DB) repositories.AuthSessionRepository {
 	return &GormAuthSessionRepository{db: db}
 }
 

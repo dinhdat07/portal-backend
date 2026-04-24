@@ -5,15 +5,14 @@ import (
 	"portal-system/internal/auth"
 	"portal-system/internal/config"
 	portalgrpc "portal-system/internal/grpc"
-	"portal-system/internal/http/handlers"
 	"portal-system/internal/platform/email"
 	redisx "portal-system/internal/platform/redis"
 	"portal-system/internal/platform/storage"
 	"portal-system/internal/platform/token"
-	"portal-system/internal/services"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"portal-system/internal/services"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -21,18 +20,9 @@ import (
 type App struct {
 	Config *config.Config
 	DB     *gorm.DB
-
-	// transport - http
-	Router *gin.Engine
-
 	// auth
 	Authenticator *auth.Authenticator
 	Authorizer    *auth.Authorizer
-
-	// http handlers
-	AuthHandler  *handlers.AuthHandler
-	UserHandler  *handlers.UserHandler
-	AdminHandler *handlers.AdminHandler
 
 	// grpc servers
 	AuthGRPC  *portalgrpc.AuthServer
@@ -119,10 +109,6 @@ func New() (*App, error) {
 		FrontendURL: cfg.FrontEndUrl,
 	})
 
-	authHandler := handlers.NewAuthHandler(authService)
-	userHandler := handlers.NewUserHandler(userService)
-	adminHandler := handlers.NewAdminHandler(adminService, userService)
-
 	authGRPC := portalgrpc.NewAuthServer(authService)
 	userGRPC := portalgrpc.NewUserServer(userService)
 	adminGRPC := portalgrpc.NewAdminServer(adminService, userService)
@@ -147,9 +133,6 @@ func New() (*App, error) {
 		DB:            db,
 		Authenticator: authenticator,
 		Authorizer:    authorizer,
-		AuthHandler:   authHandler,
-		UserHandler:   userHandler,
-		AdminHandler:  adminHandler,
 		AuthGRPC:      authGRPC,
 		UserGRPC:      userGRPC,
 		AdminGRPC:     adminGRPC,

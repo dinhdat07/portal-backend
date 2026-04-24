@@ -16,22 +16,28 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserService struct {
+type UserService interface {
+	GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID) (*models.User, error)
+	UpdateProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, input domain.UpdateUserInput) (*models.User, error)
+	ChangePassword(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, current, newPassword, confirm string) error
+}
+
+type userService struct {
 	txManager   repositories.TxManager
-	auditLogger auditLogger
+	auditLogger AuditLogger
 	roleRepo    repositories.RoleRepository
 	userRepo    repositories.UserRepository
 }
 
 type UserServiceDeps struct {
 	TxManager   repositories.TxManager
-	AuditLogger auditLogger
+	AuditLogger AuditLogger
 	RoleRepo    repositories.RoleRepository
 	UserRepo    repositories.UserRepository
 }
 
-func NewUserService(deps UserServiceDeps) *UserService {
-	return &UserService{
+func NewUserService(deps UserServiceDeps) UserService {
+	return &userService{
 		txManager:   deps.TxManager,
 		userRepo:    deps.UserRepo,
 		roleRepo:    deps.RoleRepo,
@@ -39,7 +45,7 @@ func NewUserService(deps UserServiceDeps) *UserService {
 	}
 }
 
-func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID) (*models.User, error) {
+func (svc *userService) GetProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -58,7 +64,7 @@ func (svc *UserService) GetProfile(ctx context.Context, meta *domain.AuditMeta, 
 	return user, nil
 }
 
-func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, current, newPassword, confirm string) error {
+func (svc *userService) ChangePassword(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, current, newPassword, confirm string) error {
 	user, err := svc.userRepo.FindByID(ctx, actor.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -109,7 +115,7 @@ func (svc *UserService) ChangePassword(ctx context.Context, meta *domain.AuditMe
 
 }
 
-func (svc *UserService) UpdateProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, input domain.UpdateUserInput) (*models.User, error) {
+func (svc *userService) UpdateProfile(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, input domain.UpdateUserInput) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

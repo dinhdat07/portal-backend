@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"portal-system/internal/auth"
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
 	"portal-system/internal/models"
-	"portal-system/internal/platform/token"
 	"portal-system/internal/repositories"
 
 	"github.com/google/uuid"
@@ -22,39 +22,55 @@ import (
 	"gorm.io/gorm"
 )
 
-type AuthService struct {
+type AuthService interface {
+	Register(ctx context.Context, meta *domain.AuditMeta, email, username, password, firstName, lastName string, dob time.Time) error
+	LogIn(ctx context.Context, meta *domain.AuditMeta, identifier, password string) (*domain.LoginResult, error)
+	Logout(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, sessionID uuid.UUID) error
+	LogoutAll(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser) error
+
+	VerifyEmail(ctx context.Context, meta *domain.AuditMeta, rawToken string, tokenType enum.TokenType) error
+	ResendVerification(ctx context.Context, meta *domain.AuditMeta, email string, tokenType enum.TokenType) error
+
+	ForgotPassword(ctx context.Context, meta *domain.AuditMeta, email string) error
+	ResetPassword(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error
+	SetPassword(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error
+
+	Refresh(ctx context.Context, meta *domain.AuditMeta, refreshToken string) (*domain.RefreshResult, error)
+}
+
+type authService struct {
 	txManager       repositories.TxManager
-	auditLogger     auditLogger
+	auditLogger     AuditLogger
 	userRepo        repositories.UserRepository
 	refreshRepo     repositories.RefreshTokenRepository
 	tokenRepo       repositories.UserTokenRepository
 	roleRepo        repositories.RoleRepository
 	sessionRepo     repositories.AuthSessionRepository
-	revoStore       SessionRevocationStore
-	tokenManager    tokenIssuer
-	emailService    emailSender
+	revoStore       auth.SessionRevocationStore
+	tokenManager    auth.TokenIssuer
+	emailService    EmailSender
 	frontendBaseURL string
 	refreshTTL      time.Duration
 }
 
 type AuthServiceDeps struct {
 	TxManager        repositories.TxManager
-	AuditLogger      auditLogger
+	AuditLogger      AuditLogger
 	UserRepo         repositories.UserRepository
 	RefreshTokenRepo repositories.RefreshTokenRepository
 	TokenRepo        repositories.UserTokenRepository
 	RoleRepo         repositories.RoleRepository
 	SessionRepo      repositories.AuthSessionRepository
-	RevoStore        SessionRevocationStore
+	RevoStore        auth.SessionRevocationStore
 
-	TokenManager    tokenIssuer
-	EmailService    emailSender
+	TokenManager    auth.TokenIssuer
+	EmailService    EmailSender
 	FrontendBaseURL string
 	RefreshTTL      time.Duration
 }
 
-func NewAuthService(deps AuthServiceDeps) *AuthService {
-	return &AuthService{
+func NewAuthService(deps AuthServiceDeps) AuthService {
+	return &authService{
 		txManager:       deps.TxManager,
 		auditLogger:     deps.AuditLogger,
 		userRepo:        deps.UserRepo,
@@ -70,7 +86,7 @@ func NewAuthService(deps AuthServiceDeps) *AuthService {
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, email, username, password, firstName, lastName string, dob time.Time) error {
+func (s *authService) Register(ctx context.Context, meta *domain.AuditMeta, email, username, password, firstName, lastName string, dob time.Time) error {
 	existing, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
@@ -95,7 +111,7 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 	}
 	hashStr := string(hash)
 
-	tokenHash, rawToken, err := generateHashToken()
+	tokenHash, rawToken, err := s.tokenManager.GenerateHashToken()
 	if err != nil {
 		return err
 	}
@@ -156,7 +172,7 @@ func (s *AuthService) Register(ctx context.Context, meta *domain.AuditMeta, emai
 	return nil
 }
 
-func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identifier, password string) (*domain.LoginResult, error) {
+func (s *authService) LogIn(ctx context.Context, meta *domain.AuditMeta, identifier, password string) (*domain.LoginResult, error) {
 	var user *models.User
 	var err error
 
@@ -193,7 +209,7 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 	}
 
 	now := time.Now()
-	refreshTokenHash := token.HashToken(refreshToken)
+	refreshTokenHash := s.tokenManager.HashToken(refreshToken)
 	refreshExpiresAt := now.Add(s.refreshTTL)
 
 	session := &models.AuthSession{
@@ -230,7 +246,7 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 	}
 
 	accessToken, err := s.tokenManager.GenerateAccessToken(
-		token.GenerateAccessTokenInput{
+		auth.GenerateAccessTokenInput{
 			UserID:    user.ID,
 			SessionID: session.ID,
 			RoleID:    user.Role.ID,
@@ -255,8 +271,8 @@ func (s *AuthService) LogIn(ctx context.Context, meta *domain.AuditMeta, identif
 	}, nil
 }
 
-func (s *AuthService) VerifyEmail(ctx context.Context, meta *domain.AuditMeta, rawToken string, tokenType enum.TokenType) error {
-	tokenHash := token.HashToken(rawToken)
+func (s *authService) VerifyEmail(ctx context.Context, meta *domain.AuditMeta, rawToken string, tokenType enum.TokenType) error {
+	tokenHash := s.tokenManager.HashToken(rawToken)
 
 	found, err := s.tokenRepo.FindValidToken(ctx, tokenHash, tokenType)
 	if err != nil {
@@ -295,7 +311,7 @@ func (s *AuthService) VerifyEmail(ctx context.Context, meta *domain.AuditMeta, r
 	return nil
 }
 
-func (s *AuthService) ResendVerification(ctx context.Context, meta *domain.AuditMeta, email string, tokenType enum.TokenType) error {
+func (s *authService) ResendVerification(ctx context.Context, meta *domain.AuditMeta, email string, tokenType enum.TokenType) error {
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
 		return ErrUserNotFound
@@ -307,7 +323,7 @@ func (s *AuthService) ResendVerification(ctx context.Context, meta *domain.Audit
 	}
 
 	// generate new token
-	tokenHash, rawToken, err := generateHashToken()
+	tokenHash, rawToken, err := s.tokenManager.GenerateHashToken()
 	if err != nil {
 		return err
 	}
@@ -342,7 +358,7 @@ func (s *AuthService) ResendVerification(ctx context.Context, meta *domain.Audit
 
 }
 
-func (s *AuthService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta, email string) error {
+func (s *authService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta, email string) error {
 
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
@@ -358,7 +374,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta
 	}
 
 	// generate token
-	tokenHash, rawToken, err := generateHashToken()
+	tokenHash, rawToken, err := s.tokenManager.GenerateHashToken()
 	if err != nil {
 		return err
 	}
@@ -402,15 +418,15 @@ func (s *AuthService) ForgotPassword(ctx context.Context, meta *domain.AuditMeta
 	return nil
 }
 
-func (s *AuthService) SetPassword(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error {
+func (s *authService) SetPassword(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error {
 	return s.applyPasswordByToken(ctx, meta, in, tokenType)
 }
 
-func (s *AuthService) ResetPassword(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error {
+func (s *authService) ResetPassword(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error {
 	return s.applyPasswordByToken(ctx, meta, in, tokenType)
 }
 
-func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error {
+func (s *authService) applyPasswordByToken(ctx context.Context, meta *domain.AuditMeta, in *domain.SetPasswordInput, tokenType enum.TokenType) error {
 	if in == nil {
 		return ErrInvalidInput
 	}
@@ -425,7 +441,7 @@ func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.Aud
 		return ErrPasswordConfirmationMismatch
 	}
 
-	tokenHash := token.HashToken(in.Token)
+	tokenHash := s.tokenManager.HashToken(in.Token)
 
 	found, err := s.tokenRepo.FindValidToken(ctx, tokenHash, tokenType)
 	if err != nil {
@@ -495,12 +511,12 @@ func (s *AuthService) applyPasswordByToken(ctx context.Context, meta *domain.Aud
 	return nil
 }
 
-func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refreshToken string) (*domain.RefreshResult, error) {
+func (s *authService) Refresh(ctx context.Context, meta *domain.AuditMeta, refreshToken string) (*domain.RefreshResult, error) {
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
 		return nil, ErrInvalidInput
 	}
-	refreshTokenHash := token.HashToken(refreshToken)
+	refreshTokenHash := s.tokenManager.HashToken(refreshToken)
 
 	foundToken, err := s.refreshRepo.FindByTokenHash(ctx, refreshTokenHash)
 	if err != nil || foundToken == nil {
@@ -537,7 +553,7 @@ func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refre
 		return nil, ErrAccountNotVerified
 	}
 
-	newRefreshTokenHash, newRefreshToken, err := generateHashToken()
+	newRefreshTokenHash, newRefreshToken, err := s.tokenManager.GenerateHashToken()
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +570,7 @@ func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refre
 	}
 
 	accessToken, err := s.tokenManager.GenerateAccessToken(
-		token.GenerateAccessTokenInput{
+		auth.GenerateAccessTokenInput{
 			UserID:    user.ID,
 			SessionID: session.ID,
 			RoleID:    user.Role.ID,
@@ -593,7 +609,7 @@ func (s *AuthService) Refresh(ctx context.Context, meta *domain.AuditMeta, refre
 	}, nil
 }
 
-func (s *AuthService) handleRefreshTokenReuse(ctx context.Context, meta *domain.AuditMeta, reused *models.RefreshToken) error {
+func (s *authService) handleRefreshTokenReuse(ctx context.Context, meta *domain.AuditMeta, reused *models.RefreshToken) error {
 	if reused == nil || reused.UserID == uuid.Nil {
 		return nil
 	}
@@ -638,7 +654,7 @@ func (s *AuthService) handleRefreshTokenReuse(ctx context.Context, meta *domain.
 	return nil
 }
 
-func (s *AuthService) Logout(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, sessionID uuid.UUID) error {
+func (s *authService) Logout(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, sessionID uuid.UUID) error {
 	if actor == nil {
 		return ErrUnauthorized
 	}
@@ -678,7 +694,7 @@ func (s *AuthService) Logout(ctx context.Context, meta *domain.AuditMeta, actor 
 	return nil
 }
 
-func (s *AuthService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser) error {
+func (s *authService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser) error {
 	if actor == nil {
 		return ErrUnauthorized
 	}
@@ -723,13 +739,4 @@ func (s *AuthService) LogoutAll(ctx context.Context, meta *domain.AuditMeta, act
 func isEmail(s string) bool {
 	_, err := mail.ParseAddress(s)
 	return err == nil
-}
-
-func generateHashToken() (string, string, error) {
-	rawToken, err := token.GenerateSecureToken(32)
-	if err != nil {
-		return "", "", ErrInternalServer
-	}
-	tokenHash := token.HashToken(rawToken)
-	return tokenHash, rawToken, nil
 }

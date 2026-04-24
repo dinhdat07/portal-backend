@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"portal-system/internal/repositories"
 
 	"gorm.io/gorm"
 )
@@ -12,7 +13,7 @@ type GormTxManager struct {
 	db *gorm.DB
 }
 
-func NewGormTxManager(db *gorm.DB) *GormTxManager {
+func NewGormTxManager(db *gorm.DB) repositories.TxManager {
 	return &GormTxManager{db: db}
 }
 

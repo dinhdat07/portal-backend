@@ -13,15 +13,20 @@ import (
 	"gorm.io/datatypes"
 )
 
-type AuditLogService struct {
+type AuditLogger interface {
+	Log(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser) error
+	LogWithMetadata(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser, data map[string]any) error
+}
+
+type auditLogService struct {
 	repo repositories.AuditLogRepository
 }
 
-func NewAuditLogService(repo repositories.AuditLogRepository) *AuditLogService {
-	return &AuditLogService{repo: repo}
+func NewAuditLogService(repo repositories.AuditLogRepository) AuditLogger {
+	return &auditLogService{repo: repo}
 }
 
-func (s *AuditLogService) Log(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser) error {
+func (s *auditLogService) Log(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser) error {
 	log := &models.AuditLog{Action: action}
 
 	if actor != nil {
@@ -50,7 +55,7 @@ func (s *AuditLogService) Log(ctx context.Context, meta *domain.AuditMeta, actio
 	return err
 }
 
-func (s *AuditLogService) List(ctx context.Context, filter domain.AuditLogFilter) ([]models.AuditLog, int64, error) {
+func (s *auditLogService) List(ctx context.Context, filter domain.AuditLogFilter) ([]models.AuditLog, int64, error) {
 	if filter.Page <= 0 {
 		filter.Page = 1
 	}
@@ -73,7 +78,7 @@ func (s *AuditLogService) List(ctx context.Context, filter domain.AuditLogFilter
 	return logs, total, nil
 }
 
-func (svc *AuditLogService) LogWithMetadata(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser, data map[string]any) error {
+func (svc *auditLogService) LogWithMetadata(ctx context.Context, meta *domain.AuditMeta, action enum.ActionName, actor *domain.AuditUser, target *domain.AuditUser, data map[string]any) error {
 	var metadata *datatypes.JSON
 	if data != nil {
 		b, err := json.Marshal(data)

@@ -15,10 +15,10 @@ import (
 
 type UserServer struct {
 	userv1.UnimplementedUserServiceServer
-	userService *services.UserService
+	userService services.UserService
 }
 
-func NewUserServer(userService *services.UserService) *UserServer {
+func NewUserServer(userService services.UserService) *UserServer {
 	return &UserServer{userService: userService}
 }
 

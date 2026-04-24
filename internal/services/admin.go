@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"portal-system/internal/auth"
 	"portal-system/internal/domain"
 	"portal-system/internal/domain/constants"
 	"portal-system/internal/domain/enum"
@@ -18,39 +19,50 @@ import (
 	"gorm.io/gorm"
 )
 
-type AdminService struct {
-	txManager   repositories.TxManager
-	auditLogger auditLogger
-	userRepo    repositories.UserRepository
-	tokenRepo   repositories.UserTokenRepository
-	roleRepo    repositories.RoleRepository
-	emailSvc    emailSender
-	frontendURL string
+type AdminService interface {
+	ListUsers(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.UsersFilter) (*domain.ListUsersResult, error)
+	CreateUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.CreateUserInput) (*models.User, error)
+	DeleteUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error)
+	RestoreUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error)
+	UpdateRole(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, roleCode constants.RoleCode) (*models.User, error)
+}
+
+type adminService struct {
+	txManager    repositories.TxManager
+	auditLogger  AuditLogger
+	userRepo     repositories.UserRepository
+	tokenRepo    repositories.UserTokenRepository
+	tokenManager auth.TokenIssuer
+	roleRepo     repositories.RoleRepository
+	emailSvc     EmailSender
+	frontendURL  string
 }
 
 type AdminServiceDeps struct {
-	TxManager   repositories.TxManager
-	AuditLogger auditLogger
-	UserRepo    repositories.UserRepository
-	TokenRepo   repositories.UserTokenRepository
-	RoleRepo    repositories.RoleRepository
-	EmailSvc    emailSender
-	FrontendURL string
+	TxManager    repositories.TxManager
+	AuditLogger  AuditLogger
+	UserRepo     repositories.UserRepository
+	TokenManager auth.TokenIssuer
+	TokenRepo    repositories.UserTokenRepository
+	RoleRepo     repositories.RoleRepository
+	EmailSvc     EmailSender
+	FrontendURL  string
 }
 
-func NewAdminService(deps AdminServiceDeps) *AdminService {
-	return &AdminService{
-		txManager:   deps.TxManager,
-		userRepo:    deps.UserRepo,
-		tokenRepo:   deps.TokenRepo,
-		roleRepo:    deps.RoleRepo,
-		auditLogger: deps.AuditLogger,
-		emailSvc:    deps.EmailSvc,
-		frontendURL: deps.FrontendURL,
+func NewAdminService(deps AdminServiceDeps) AdminService {
+	return &adminService{
+		txManager:    deps.TxManager,
+		userRepo:     deps.UserRepo,
+		tokenRepo:    deps.TokenRepo,
+		roleRepo:     deps.RoleRepo,
+		tokenManager: deps.TokenManager,
+		auditLogger:  deps.AuditLogger,
+		emailSvc:     deps.EmailSvc,
+		frontendURL:  deps.FrontendURL,
 	}
 }
 
-func (svc *AdminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.UsersFilter) (*domain.ListUsersResult, error) {
+func (svc *adminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.UsersFilter) (*domain.ListUsersResult, error) {
 	if in.RoleCode != nil {
 		role, err := svc.roleRepo.FindByCode(ctx, *in.RoleCode)
 		if err != nil {
@@ -107,7 +119,7 @@ func (svc *AdminService) ListUsers(ctx context.Context, meta *domain.AuditMeta, 
 
 }
 
-func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.CreateUserInput) (*models.User, error) {
+func (svc *adminService) CreateUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, in domain.CreateUserInput) (*models.User, error) {
 	if in.RoleCode == "" {
 		return nil, ErrInvalidInput
 	}
@@ -129,7 +141,7 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 		return nil, ErrUsernameExists
 	}
 
-	tokenHash, rawToken, err := generateHashToken()
+	tokenHash, rawToken, err := svc.tokenManager.GenerateHashToken()
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +203,7 @@ func (svc *AdminService) CreateUser(ctx context.Context, meta *domain.AuditMeta,
 	return user, nil
 }
 
-func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error) {
+func (svc *adminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -233,7 +245,7 @@ func (svc *AdminService) DeleteUser(ctx context.Context, meta *domain.AuditMeta,
 	return user, nil
 }
 
-func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error) {
+func (svc *adminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, userID uuid.UUID) (*models.User, error) {
 	user, err := svc.userRepo.FindByIDUnscoped(ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -270,7 +282,7 @@ func (svc *AdminService) RestoreUser(ctx context.Context, meta *domain.AuditMeta
 	return user, nil
 }
 
-func (svc *AdminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, roleCode constants.RoleCode) (*models.User, error) {
+func (svc *adminService) UpdateRole(ctx context.Context, meta *domain.AuditMeta, actor *domain.AuditUser, id uuid.UUID, roleCode constants.RoleCode) (*models.User, error) {
 	if roleCode == "" {
 		return nil, ErrInvalidInput
 	}

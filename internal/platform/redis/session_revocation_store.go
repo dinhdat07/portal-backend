@@ -3,6 +3,7 @@ package redisx
 import (
 	"context"
 	"fmt"
+	"portal-system/internal/auth"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,7 +14,7 @@ type RedisSessionRevocationStore struct {
 	rdb *redis.Client
 }
 
-func NewRedisSessionRevocationStore(rdb *redis.Client) *RedisSessionRevocationStore {
+func NewRedisSessionRevocationStore(rdb *redis.Client) auth.SessionRevocationStore {
 	return &RedisSessionRevocationStore{rdb: rdb}
 }
 
