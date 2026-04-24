@@ -70,6 +70,9 @@ func (r *GormRoleRepository) GetWithPermissions(ctx context.Context, roleID uuid
 		Preload("Permissions").
 		First(&role, "id = ?", roleID).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, repositories.ErrNotFound
+		}
 		return nil, err
 	}
 

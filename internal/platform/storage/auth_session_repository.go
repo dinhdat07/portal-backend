@@ -23,25 +23,6 @@ func (r *GormAuthSessionRepository) Create(ctx context.Context, session *models.
 	return r.getDB(ctx).Create(session).Error
 }
 
-func (r *GormAuthSessionRepository) FindActiveByRefreshTokenHash(ctx context.Context, hashToken string) (*models.AuthSession, error) {
-	var AuthSession models.AuthSession
-
-	err := r.getDB(ctx).
-		Where("refresh_token_hash = ?", hashToken).
-		Where("revoked_at IS NULL").
-		Where("expires_at > ?", time.Now().UTC()).
-		First(&AuthSession).Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, repositories.ErrNotFound
-		}
-		return nil, err
-	}
-
-	return &AuthSession, nil
-}
-
 func (r *GormAuthSessionRepository) FindActiveByID(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
 	var AuthSession models.AuthSession
 
