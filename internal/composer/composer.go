@@ -56,6 +56,7 @@ func Composer() (*app.App, error) {
 		}
 	}
 
+	validator := bootstrap.NewValidator()
 	infra := newInfra(cfg, smtpCfg, rdb)
 	repos := newRepositories(db)
 	svcs := newServices(cfg, infra, repos)
@@ -64,6 +65,7 @@ func Composer() (*app.App, error) {
 	return app.New(app.Deps{
 		Config:        cfg,
 		DB:            db,
+		Validator:     validator,
 		Authenticator: svcs.Authenticator,
 		Authorizer:    svcs.Authorizer,
 		AuthGRPC:      grpcServers.Auth,

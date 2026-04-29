@@ -19,6 +19,7 @@ func (a *App) NewGRPCServer() *grpc.Server {
 	s := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			interceptor.RecoveryInterceptor(),
+			interceptor.ValidationInterceptor(a.Validator),
 			interceptor.AuthenticationInterceptor(a.Authenticator, publicMethods),
 			interceptor.PermissionInterceptor(a.Authorizer, methodPermissions),
 		),

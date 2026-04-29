@@ -5,6 +5,7 @@ import (
 	"portal-system/internal/config"
 	portalgrpc "portal-system/internal/grpc"
 
+	"buf.build/go/protovalidate"
 	"gorm.io/gorm"
 )
 
@@ -12,6 +13,7 @@ type App struct {
 	Config *config.Config
 	DB     *gorm.DB
 
+	Validator     protovalidate.Validator
 	Authenticator *auth.Authenticator
 	Authorizer    *auth.Authorizer
 
@@ -24,6 +26,7 @@ type Deps struct {
 	Config *config.Config
 	DB     *gorm.DB
 
+	Validator     protovalidate.Validator
 	Authenticator *auth.Authenticator
 	Authorizer    *auth.Authorizer
 
@@ -36,6 +39,7 @@ func New(deps Deps) *App {
 	return &App{
 		Config:        deps.Config,
 		DB:            deps.DB,
+		Validator:     deps.Validator,
 		Authenticator: deps.Authenticator,
 		Authorizer:    deps.Authorizer,
 		AuthGRPC:      deps.AuthGRPC,
